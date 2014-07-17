@@ -1,4 +1,8 @@
 /*
+ * Copyright (C) 2017, The Linux Foundation. All rights reserved.
+ * Not a Contribution.
+ */
+/*
  * Copyright (c) 2014 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,7 +36,7 @@ import android.os.Looper;
 import android.os.Message;
 import android.provider.Settings;
 import android.util.Log;
-
+import com.android.bluetooth.a2dp.A2dpService;
 import com.android.bluetooth.btservice.ProfileService;
 import com.android.bluetooth.hfpclient.connserv.HfpClientConnectionService;
 import com.android.bluetooth.Utils;
@@ -492,6 +496,15 @@ public class HeadsetClientService extends ProfileService {
             Log.w(TAG, "Connection not allowed: <" + device.getAddress() + "> is PRIORITY_OFF");
             return false;
         }
+
+        //do not allow new connections with active multicast
+        A2dpService a2dpService = A2dpService.getA2dpService();
+        if (a2dpService != null &&
+                (a2dpService.isMulticastOngoing(device))) {
+            Log.i(TAG,"A2dp Multicast is Ongoing, ignore Connection Request");
+            return false;
+        }
+
 
         sm.sendMessage(HeadsetClientStateMachine.CONNECT, device);
         return true;

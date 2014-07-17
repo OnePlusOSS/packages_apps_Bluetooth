@@ -32,7 +32,7 @@ public class AvrcpTest extends AndroidTestCase {
     public void testCanStart() {
         if (Looper.myLooper() == null) Looper.prepare();
 
-        Avrcp a = Avrcp.make(getContext());
+        Avrcp a = Avrcp.make(getContext(), null, 1);
     }
 
     public void testFailedBrowseStart() {
@@ -69,7 +69,7 @@ public class AvrcpTest extends AndroidTestCase {
         // Make calls start() which calls buildMediaPlayersList() which should
         // try to start the service?
         try {
-            Avrcp a = Avrcp.make(mockContext);
+            Avrcp a = Avrcp.make(mockContext, null, 1);
         } catch (SecurityException e) {
             fail("Threw SecurityException instead of protecting against it: " + e.toString());
         }

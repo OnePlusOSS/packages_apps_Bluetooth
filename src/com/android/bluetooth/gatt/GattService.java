@@ -1,4 +1,8 @@
 /*
+ * Copyright (C) 2017, The Linux Foundation. All rights reserved.
+ * Not a Contribution.
+ */
+/*
  * Copyright (C) 2017 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -55,6 +59,7 @@ import com.android.bluetooth.R;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.BluetoothProto;
+import com.android.bluetooth.a2dp.A2dpService;
 import com.android.bluetooth.btservice.ProfileService;
 import com.android.bluetooth.util.NumberUtils;
 import com.android.internal.annotations.VisibleForTesting;
@@ -421,6 +426,15 @@ public class GattService extends ProfileService {
                 int clientIf, String address, boolean isDirect, int transport, int phy) {
             GattService service = getService();
             if (service == null) return;
+
+            //do not allow new connections with active multicast
+            A2dpService a2dpService = A2dpService.getA2dpService();
+            if (a2dpService != null &&
+                    a2dpService.isMulticastOngoing(null)) {
+                Log.i(TAG,"A2dp Multicast is Ongoing, ignore Connection Request");
+                return;
+            }
+
             service.clientConnect(clientIf, address, isDirect, transport, phy);
         }
 
@@ -550,6 +564,15 @@ public class GattService extends ProfileService {
         public void serverConnect(int serverIf, String address, boolean isDirect, int transport) {
             GattService service = getService();
             if (service == null) return;
+
+            //do not allow new connections with active multicast
+            A2dpService a2dpService = A2dpService.getA2dpService();
+            if (a2dpService != null &&
+                    a2dpService.isMulticastOngoing(null)) {
+                Log.i(TAG,"A2dp Multicast is Ongoing, ignore Connection Request");
+                return;
+            }
+
             service.serverConnect(serverIf, address, isDirect, transport);
         }
 

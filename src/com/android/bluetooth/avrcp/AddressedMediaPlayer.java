@@ -1,4 +1,8 @@
 /*
+ * Copyright (C) 2017, The Linux Foundation. All rights reserved.
+ * Not a Contribution.
+ */
+/*
  * Copyright (C) 2016 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -258,7 +262,7 @@ public class AddressedMediaPlayer {
         mMediaInterface.getTotalNumOfItemsRsp(bdaddr, AvrcpConstants.RSP_NO_ERROR, 0, items.size());
     }
 
-    boolean sendTrackChangeWithId(boolean requesting, @Nullable MediaController mediaController) {
+    boolean sendTrackChangeWithId(boolean requesting, @Nullable MediaController mediaController, byte[] bdaddr) {
         if (DEBUG)
             Log.d(TAG, "sendTrackChangeWithId (" + requesting + "): controller " + mediaController);
         long qid = getActiveQueueItemId(mediaController);
@@ -266,7 +270,7 @@ public class AddressedMediaPlayer {
         if (DEBUG) Log.d(TAG, "trackChangedRsp: 0x" + Utils.byteArrayToString(track));
         int trackChangedNT = AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
         if (requesting) trackChangedNT = AvrcpConstants.NOTIFICATION_TYPE_INTERIM;
-        mMediaInterface.trackChangedRsp(trackChangedNT, track);
+        mMediaInterface.trackChangedRsp(trackChangedNT, track, bdaddr);
         mLastTrackIdSent = qid;
         return (trackChangedNT == AvrcpConstants.NOTIFICATION_TYPE_CHANGED);
     }
