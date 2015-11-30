@@ -183,12 +183,13 @@ final class AdapterState extends StateMachine {
             switch(msg.what) {
                case USER_TURN_ON:
                    notifyAdapterStateChange(BluetoothAdapter.STATE_TURNING_ON);
+                   adapterProperties.clearDisableFlag();
                    mPendingCommandState.setTurningOn(true);
                    transitionTo(mPendingCommandState);
                    sendMessageDelayed(BREDR_START_TIMEOUT, BREDR_START_TIMEOUT_DELAY);
                    adapterService.startCoreServices();
                    break;
-
+               case BLE_TURN_OFF:
                case USER_TURN_OFF:
                    notifyAdapterStateChange(BluetoothAdapter.STATE_BLE_TURNING_OFF);
                    mPendingCommandState.setBleTurningOff(true);
@@ -204,7 +205,8 @@ final class AdapterState extends StateMachine {
                         notifyAdapterStateChange(BluetoothAdapter.STATE_BLE_ON);
                    }
                    break;
-
+                case BLE_TURN_ON:
+                   break;
                default:
                    return false;
             }
@@ -385,6 +387,7 @@ final class AdapterState extends StateMachine {
                     break;
 
                 case SET_SCAN_MODE_TIMEOUT:
+                     adapterProperties.clearDisableFlag();
                      warningLog("Timeout while setting scan mode. Continuing with disable...");
                      //Fall through
                 case BEGIN_DISABLE:
@@ -434,25 +437,31 @@ final class AdapterState extends StateMachine {
                 case BREDR_START_TIMEOUT:
                     errorLog("Error enabling Bluetooth (start timeout)");
                     mPendingCommandState.setTurningOn(false);
-                    adapterService.stopProfileServices();
-                    transitionTo(mBleOnState);
-                    notifyAdapterStateChange(BluetoothAdapter.STATE_BLE_ON);
+                    notifyAdapterStateChange(BluetoothAdapter.STATE_OFF);
+                    adapterService.disableProfileServices();
+                    transitionTo(mOffState);
+                    errorLog("BREDR_START_TIMEOUT:Killing the process to force a restart as part cleanup");
+                    android.os.Process.killProcess(android.os.Process.myPid());
                     break;
 
                 case ENABLE_TIMEOUT:
                     errorLog("Error enabling Bluetooth (enable timeout)");
                     mPendingCommandState.setBleTurningOn(false);
-                    transitionTo(mOffState);
-                    adapterService.stopProfileServices();
                     adapterService.stopGattProfileService();
                     notifyAdapterStateChange(BluetoothAdapter.STATE_OFF);
+                    transitionTo(mOffState);
+                    errorLog("ENABLE_TIMEOUT:Killing the process to force a restart as part cleanup");
+                    android.os.Process.killProcess(android.os.Process.myPid());
                     break;
 
                 case BREDR_STOP_TIMEOUT:
                     errorLog("Error stopping Bluetooth profiles (stop timeout)");
                     mPendingCommandState.setTurningOff(false);
-                    transitionTo(mBleOnState);
-                    notifyAdapterStateChange(BluetoothAdapter.STATE_BLE_ON);
+                    notifyAdapterStateChange(BluetoothAdapter.STATE_OFF);
+                    adapterService.disableProfileServices();
+                    transitionTo(mOffState);
+                    errorLog("BREDR_STOP_TIMEOUT:Killing the process to force a restart as part cleanup");
+                    android.os.Process.killProcess(android.os.Process.myPid());
                     break;
 
                 case BLE_STOP_TIMEOUT:
@@ -464,14 +473,17 @@ final class AdapterState extends StateMachine {
 
                 case DISABLE_TIMEOUT:
                     errorLog("Error disabling Bluetooth (disable timeout)");
-                    if (isTurningOn)
+                    if (isTurningOn) {
                         mPendingCommandState.setTurningOn(false);
-                    adapterService.stopProfileServices();
+                        adapterService.stopProfileServices();
+                    }
                     adapterService.stopGattProfileService();
                     mPendingCommandState.setTurningOff(false);
                     setBleTurningOff(false);
                     transitionTo(mOffState);
                     notifyAdapterStateChange(BluetoothAdapter.STATE_OFF);
+                    errorLog("Killing the process to force a restart as part cleanup");
+                    android.os.Process.killProcess(android.os.Process.myPid());
                     break;
 
                 default:

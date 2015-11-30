@@ -127,6 +127,7 @@ class HeadsetPhoneState {
 
             if (SubscriptionManager.isValidSubscriptionId(subId)) {
                 mPhoneStateListener = getPhoneStateListener(subId);
+
                 if (mTelephonyManager == null) {
                     Log.e(TAG, "mTelephonyManager is null, "
                          + "cannot start listening for phone state changes");

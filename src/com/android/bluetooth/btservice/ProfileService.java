@@ -141,8 +141,22 @@ public abstract class ProfileService extends Service {
                     Log.d(mName, "Received stop request...Stopping profile...");
                     doStop(intent);
                 } else if (state == BluetoothAdapter.STATE_ON) {
-                    Log.d(mName, "Received start request. Starting profile...");
-                    doStart(intent);
+                    if ((mAdapter.getLeState()== BluetoothAdapter.STATE_TURNING_ON &&
+                        !mName.equals("BtGatt.GattService")) ||
+                        (mAdapter.getLeState()== BluetoothAdapter.STATE_BLE_TURNING_ON &&
+                        mName.equals("BtGatt.GattService")) ) {
+
+                        Log.d(mName, "Received start request. Starting profile...");
+                        if (adapterService != null) {
+                            adapterService.addProfile(this);
+                        } else {
+                            Log.w(TAG, "onStart, null adapterService, this should never happen ");
+                        }
+
+                        doStart(intent);
+                    } else {
+                        Log.e(mName, ":intent received late, not starting profile");
+                    }
                 }
             }
         }
@@ -208,6 +222,7 @@ public abstract class ProfileService extends Service {
             if (DBG) log("start()");
             mStartError = !start();
             if (!mStartError) {
+                Log.d(mName, " profile started successfully");
                 notifyProfileServiceStateChanged(BluetoothAdapter.STATE_ON);
             } else {
                 Log.e(mName, "Error starting profile. BluetoothAdapter is null");
@@ -218,8 +233,9 @@ public abstract class ProfileService extends Service {
     private void doStop(Intent intent) {
         if (stop()) {
             if (DBG) log("stop()");
-            notifyProfileServiceStateChanged(BluetoothAdapter.STATE_OFF);
             stopSelf();
+            Log.d(mName, " profile stopped successfully");
+            notifyProfileServiceStateChanged(BluetoothAdapter.STATE_OFF);
         } else {
             Log.e(mName, "Unable to stop profile");
         }
