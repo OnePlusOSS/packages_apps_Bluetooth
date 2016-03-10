@@ -67,6 +67,7 @@ import com.android.bluetooth.btservice.ProfileService;
 import com.android.internal.util.IState;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
+import java.util.Iterator;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -114,6 +115,7 @@ final class HeadsetStateMachine extends StateMachine {
     static final int UPDATE_A2DP_CONN_STATE = 20;
     static final int QUERY_PHONE_STATE_AT_SLC = 21;
     static final int UPDATE_CALL_TYPE = 22;
+    static final int SEND_INCOMING_CALL_IND = 23;
 
     private static final int STACK_EVENT = 101;
     private static final int DIALING_OUT_TIMEOUT = 102;
@@ -124,11 +126,21 @@ final class HeadsetStateMachine extends StateMachine {
     private static final int CONNECT_TIMEOUT = 201;
     /* Allow time for possible LMP response timeout + Page timeout */
     private static final int CONNECT_TIMEOUT_SEC = 38000;
+    /* Retry outgoing connection after this time if the first attempt fails */
+    private static final int RETRY_CONNECT_TIME_SEC = 2500;
 
     private static final int DIALING_OUT_TIMEOUT_VALUE = 10000;
     private static final int START_VR_TIMEOUT_VALUE = 5000;
     private static final int CLCC_RSP_TIMEOUT_VALUE = 5000;
     private static final int QUERY_PHONE_STATE_CHANGED_DELAYED = 100;
+    private static final int INCOMING_CALL_IND_DELAY = 200;
+    // Blacklist remote device addresses to send incoimg call indicators with delay of 200ms
+    private static final String [] BlacklistDeviceAddrToDelayCallInd =
+                                                               {"00:15:83", /* Beiqi CK */
+                                                                "2a:eb:00", /* BIAC CK */
+                                                                "30:53:00", /* BIAC series */
+                                                                "00:17:53",  /* ADAYO CK */
+                                                               };
 
     // Max number of HF connections at any time
     private int max_hf_connections = 1;
@@ -198,6 +210,9 @@ final class HeadsetStateMachine extends StateMachine {
 
     // Indicate whether service level connection has been established for this device
     private boolean mSlcConnected = false;
+    private boolean mIsCallIndDelay = false;
+
+    private boolean mIsBlacklistedDevice = false;
 
     // mCurrentDevice is the device connected before the state changes
     // mTargetDevice is the device to be connected
@@ -392,6 +407,7 @@ final class HeadsetStateMachine extends StateMachine {
             mWaitingForVoiceRecognition = false;
             mSlcConnected = false;
             mDialingOut = false;
+            mIsBlacklistedDevice = false;
         }
 
         @Override
@@ -694,8 +710,18 @@ final class HeadsetStateMachine extends StateMachine {
                     } else if (mTargetDevice != null && mTargetDevice.equals(device)) {
                         // outgoing connection failed
                         if (mRetryConnect.containsKey(mTargetDevice)) {
-                            Log.d(TAG, "Removing conn retry entry for device = " + mTargetDevice);
-                            mRetryConnect.remove(mTargetDevice);
+                            // retry again only if we tried once
+                            if (mRetryConnect.get(device) == 1) {
+                                Log.d(TAG, "Retry outgoing conn again for device = " + mTargetDevice
+                                      + " after " + RETRY_CONNECT_TIME_SEC + "msec");
+                                Message m = obtainMessage(CONNECT);
+                                m.obj = device;
+                                sendMessageDelayed(m, RETRY_CONNECT_TIME_SEC);
+                            } else {
+                                Log.d(TAG, "Removing conn retry entry for device = " +
+                                      mTargetDevice);
+                                mRetryConnect.remove(mTargetDevice);
+                            }
                         }
                         broadcastConnectionState(mTargetDevice, BluetoothProfile.STATE_DISCONNECTED,
                                 BluetoothProfile.STATE_CONNECTING);
@@ -849,14 +875,8 @@ final class HeadsetStateMachine extends StateMachine {
     private class Connected extends State {
         @Override
         public void enter() {
-            // Remove pending connection attempts that were deferred during the pending
-            // state. This is to prevent auto connect attempts from disconnecting
-            // devices that previously successfully connected.
-            // TODO: This needs to check for multiple HFP connections, once supported...
-            removeDeferredMessages(CONNECT);
-
-            log("Enter Connected: " + getCurrentMessage().what + ", size: "
-                    + mConnectedDevicesList.size());
+            Log.d(TAG, "Enter Connected: " + getCurrentMessage().what +
+                           ", size: " + mConnectedDevicesList.size());
             // start phone state listener here so that the CIND response as part of SLC can be
             // responded to, correctly.
             // we may enter Connected from Disconnected/Pending/AudioOn. listenForPhoneState
@@ -980,9 +1000,9 @@ final class HeadsetStateMachine extends StateMachine {
                 } break;
                 case CONNECT_AUDIO: {
                     BluetoothDevice device = mCurrentDevice;
-                    if (!isScoAcceptable()) {
-                        Log.w(TAG,
-                                "No Active/Held call, no call setup, and no in-band ringing, not allowing SCO");
+                    if (!isScoAcceptable() || mPendingCiev) {
+                        Log.w(TAG,"No Active/Held call, MO call setup, or A2DP"
+                                    + " is playing, not allowing SCO");
                         break;
                     }
                     // TODO(BT) when failure, broadcast audio connecting to disconnected intent
@@ -1083,6 +1103,10 @@ final class HeadsetStateMachine extends StateMachine {
                 case PROCESS_CPBR:
                     Intent intent = (Intent) message.obj;
                     processCpbr(intent);
+                    break;
+                case SEND_INCOMING_CALL_IND:
+                    phoneStateChangeNative(0, 0, HeadsetHalConstants.CALL_STATE_INCOMING,
+                                       mPhoneState.getNumber(), mPhoneState.getType());
                     break;
                 case STACK_EVENT:
                     StackEvent event = (StackEvent) message.obj;
@@ -1302,6 +1326,9 @@ final class HeadsetStateMachine extends StateMachine {
             } else {
                 Log.e(TAG, "Handsfree phone proxy null for query phone state");
             }
+            // Checking for the Blacklisted device Addresses
+            mIsBlacklistedDevice = isConnectedDeviceBlacklistedforIncomingCall();
+            Log.d(TAG, "Exit Connected processSlcConnected()");
         }
 
         private void processMultiHFDisconnect(BluetoothDevice device) {
@@ -1579,6 +1606,10 @@ final class HeadsetStateMachine extends StateMachine {
                 case PROCESS_CPBR:
                     Intent intent = (Intent) message.obj;
                     processCpbr(intent);
+                    break;
+                case SEND_INCOMING_CALL_IND:
+                    phoneStateChangeNative(0, 0, HeadsetHalConstants.CALL_STATE_INCOMING,
+                                       mPhoneState.getNumber(), mPhoneState.getType());
                     break;
                 case STACK_EVENT:
                     StackEvent event = (StackEvent) message.obj;
@@ -2123,8 +2154,18 @@ final class HeadsetStateMachine extends StateMachine {
                         }
                     } else if (mTargetDevice != null && mTargetDevice.equals(device)) {
                         if (mRetryConnect.containsKey(mTargetDevice)) {
-                            Log.d(TAG, "Removing conn retry entry for device = " + mTargetDevice);
-                            mRetryConnect.remove(mTargetDevice);
+                            // retry again only if we tried once
+                            if (mRetryConnect.get(device) == 1) {
+                                Log.d(TAG, "Retry outgoing conn again for device = " + mTargetDevice
+                                      + " after " + RETRY_CONNECT_TIME_SEC + "msec");
+                                Message m = obtainMessage(CONNECT);
+                                m.obj = device;
+                                sendMessageDelayed(m, RETRY_CONNECT_TIME_SEC);
+                            } else {
+                                Log.d(TAG, "Removing conn retry entry for device = " +
+                                      mTargetDevice);
+                                mRetryConnect.remove(mTargetDevice);
+                            }
                         }
                         broadcastConnectionState(mTargetDevice, BluetoothProfile.STATE_DISCONNECTED,
                                 BluetoothProfile.STATE_CONNECTING);
@@ -2464,8 +2505,9 @@ final class HeadsetStateMachine extends StateMachine {
             sco disconnect issued in AudioOn state. This was causing a mismatch in the
             Incall screen UI. */
 
-            if (getCurrentState() == mAudioOn && mCurrentDevice.equals(device)
-                    && mAudioState != BluetoothHeadset.STATE_AUDIO_DISCONNECTED) {
+            if (mActiveScoDevice != null && mActiveScoDevice.equals(device)
+                && mAudioState != BluetoothHeadset.STATE_AUDIO_DISCONNECTED)
+            {
                 return true;
             }
         }
@@ -2934,7 +2976,9 @@ final class HeadsetStateMachine extends StateMachine {
 
     private void processIntentUpdateCallType(Intent intent) {
         Log.d(TAG, "Enter processIntentUpdateCallType()");
+        /* TODO: Enable this after frameworks, libhardware gerrits got merged
         mIsCsCall = intent.getBooleanExtra(TelecomManager.EXTRA_CALL_TYPE_CS, true);
+        */
         Log.d(TAG, "processIntentUpdateCallType " + mIsCsCall);
         mPhoneState.setIsCsCall(mIsCsCall);
         if (mActiveScoDevice != null) {
@@ -2948,22 +2992,6 @@ final class HeadsetStateMachine extends StateMachine {
             log("processIntentUpdateCallType: Sco not yet connected");
         }
         Log.d(TAG, "Exit processIntentUpdateCallType()");
-    }
-
-    private void processIntentUpdateCallType(Intent intent) {
-        mIsCsCall = intent.getBooleanExtra(TelecomManager.EXTRA_CALL_TYPE_CS, true);
-        Log.d(TAG, "processIntentUpdateCallType " + mIsCsCall);
-        mPhoneState.setIsCsCall(mIsCsCall);
-        if (mActiveScoDevice != null) {
-            if (!mPhoneState.getIsCsCall()) {
-                log("processIntentUpdateCallType, Non CS call, check for network type");
-                sendVoipConnectivityNetworktype(true);
-            } else {
-                log("processIntentUpdateCallType, CS call, do not check for network type");
-            }
-        } else {
-            log("processIntentUpdateCallType: Sco not yet connected");
-        }
     }
 
     private void processIntentA2dpPlayStateChanged(Intent intent) {
@@ -3004,6 +3032,7 @@ final class HeadsetStateMachine extends StateMachine {
                     if (it != null) {
                         while (it.hasNext()) {
                             HeadsetCallState callState = it.next();
+                            Log.d(TAG, "mIsCallIndDelay: " + mIsCallIndDelay);
                             phoneStateChangeNative( callState.mNumActive,
                                             callState.mNumHeld,callState.mCallState,
                                             callState.mNumber,callState.mType);
@@ -3178,6 +3207,29 @@ final class HeadsetStateMachine extends StateMachine {
     }
 
     private void processCallState(HeadsetCallState callState, boolean isVirtualCall) {
+        Log.d(TAG, "Enter processCallState()");
+
+        /* If active call is ended, no held call is present, disconnect SCO
+         * and fake the MT Call indicators. */
+        Log.d(TAG, "mIsBlacklistedDevice:" + mIsBlacklistedDevice);
+        if (mIsBlacklistedDevice &&
+            mPhoneState.getNumActiveCall() == 1 &&
+            callState.mNumActive == 0 &&
+            callState.mNumHeld == 0 &&
+            callState.mCallState == HeadsetHalConstants.CALL_STATE_INCOMING) {
+
+            Log.d(TAG, "Disconnect SCO since active call is ended, only waiting call is there");
+            Message m = obtainMessage(DISCONNECT_AUDIO);
+            m.obj = mCurrentDevice;
+            sendMessage(m);
+
+            Log.d(TAG, "Send Idle call indicators once Active call disconnected.");
+            mPhoneState.setCallState(HeadsetHalConstants.CALL_STATE_IDLE);
+            phoneStateChangeNative(callState.mNumActive, callState.mNumHeld,
+                  HeadsetHalConstants.CALL_STATE_IDLE, callState.mNumber, callState.mType);
+            mIsCallIndDelay = true;
+        }
+
         mPhoneState.setNumActiveCall(callState.mNumActive);
         mPhoneState.setNumHeldCall(callState.mNumHeld);
         mPhoneState.setCallState(callState.mCallState);
@@ -3255,8 +3307,14 @@ final class HeadsetStateMachine extends StateMachine {
         }
         if (getCurrentState() != mDisconnected) {
             log("No A2dp playing to suspend");
-            phoneStateChangeNative(callState.mNumActive, callState.mNumHeld,
-                callState.mCallState, callState.mNumber, callState.mType);
+            Log.d(TAG, "mIsCallIndDelay: " + mIsCallIndDelay);
+            if (mIsCallIndDelay) {
+                mIsCallIndDelay = false;
+                sendMessageDelayed(SEND_INCOMING_CALL_IND, INCOMING_CALL_IND_DELAY);
+            } else {
+                phoneStateChangeNative(callState.mNumActive, callState.mNumHeld,
+                  callState.mCallState, callState.mNumber, callState.mType);
+            }
         }
         if (mA2dpSuspend && (!isAudioOn())) {
             if ((!isInCall()) && (callState.mNumber.isEmpty())) {
@@ -3863,10 +3921,11 @@ final class HeadsetStateMachine extends StateMachine {
     private void processSendClccResponse(HeadsetClccResponse clcc) {
         BluetoothDevice device = getDeviceForMessage(CLCC_RSP_TIMEOUT);
         if (device == null) {
+            Log.w(TAG, "device is null, not sending clcc response");
             return;
         }
         if (clcc.mIndex == 0) {
-            removeMessages(CLCC_RSP_TIMEOUT);
+            getHandler().removeMessages(CLCC_RSP_TIMEOUT, device);
         }
         clccResponseNative(clcc.mIndex, clcc.mDirection, clcc.mStatus, clcc.mMode, clcc.mMpty,
                 clcc.mNumber, clcc.mType, getByteAddress(device));
@@ -3948,6 +4007,20 @@ final class HeadsetStateMachine extends StateMachine {
         return ret;
     }
 
+    boolean isConnectedDeviceBlacklistedforIncomingCall() {
+        // Checking for the Blacklisted device Addresses
+        if (max_hf_connections < 2) {
+            BluetoothDevice device = mConnectedDevicesList.get(0);
+            for (int j = 0; j < BlacklistDeviceAddrToDelayCallInd.length;j++) {
+                 String addr = BlacklistDeviceAddrToDelayCallInd[j];
+                 if (device.toString().toLowerCase().startsWith(addr.toLowerCase())) {
+                     Log.d(TAG,"Remote device address Blacklisted for sending delay");
+                     return true;
+                 }
+            }
+        }
+        return false;
+    }
     private void sendVoipConnectivityNetworktype(boolean isVoipStarted) {
         NetworkInfo networkInfo = mConnectivityManager.getActiveNetworkInfo();
         if (networkInfo == null || !networkInfo.isAvailable() || !networkInfo.isConnected()) {
@@ -3959,7 +4032,9 @@ final class HeadsetStateMachine extends StateMachine {
             log("Voip/VoLTE started/stopped on n/w TYPE_MOBILE, don't update to soc");
         } else if (networkInfo.getType() == ConnectivityManager.TYPE_WIFI) {
             log("Voip/VoLTE started/stopped on n/w TYPE_WIFI, update n/w type & start/stop to soc");
+            /* TODO: Enable this after libhardware and frameworks gerrits are merged
             voipNetworkWifiInfoNative(isVoipStarted, true);
+            */
         } else {
             log("Voip/VoLTE started/stopped on some other n/w, don't update to soc");
         }
@@ -4055,6 +4130,8 @@ final class HeadsetStateMachine extends StateMachine {
     private native boolean phoneStateChangeNative(
             int numActive, int numHeld, int callState, String number, int type);
     private native boolean configureWBSNative(byte[] address, int condec_config);
+  /* TODO: Enable this after libhardware and frameworks gerrits are merged
     private native boolean voipNetworkWifiInfoNative(boolean isVoipStarted,
                                                      boolean isNetworkWifi);
+  */
 }
