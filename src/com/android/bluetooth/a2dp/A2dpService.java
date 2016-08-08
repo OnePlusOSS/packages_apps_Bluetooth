@@ -121,6 +121,7 @@ public class A2dpService extends ProfileService {
                 SystemProperties.getInt("persist.bt.enable.multicast", 0);
         String offloadSupported =
                 SystemProperties.get("persist.bt.enable.splita2dp");
+        if (DBG) Log.d(TAG, "START of A2dpService");
         // Split A2dp will be enabled by default
         if (offloadSupported.isEmpty() || "true".equals(offloadSupported)) {
             Log.i(TAG,"Split A2dp enabled");
@@ -152,6 +153,7 @@ public class A2dpService extends ProfileService {
 
 
     protected boolean stop() {
+        if (DBG) Log.d(TAG, "STOP of A2dpService");
         if (mStateMachine != null) {
             mStateMachine.doQuit();
         }
@@ -160,10 +162,12 @@ public class A2dpService extends ProfileService {
             mAvrcp.doQuit();
             mAvrcp = null;
         }
+        if (DBG) Log.d(TAG, "Exit STOP of A2dpService");
         return true;
     }
 
     protected boolean cleanup() {
+        if (DBG) Log.d(TAG, "Enter cleanup");
         unregisterReceiver(mConnectionStateChangedReceiver);
         if (mStateMachine!= null) {
             mStateMachine.cleanup();
@@ -173,6 +177,7 @@ public class A2dpService extends ProfileService {
             mAvrcp = null;
         }
         clearA2dpService();
+        if (DBG) Log.d(TAG, "Exit cleanup");
         return true;
     }
 
@@ -213,6 +218,7 @@ public class A2dpService extends ProfileService {
     }
 
     public boolean connect(BluetoothDevice device) {
+        if (DBG) Log.d(TAG, "Enter connect");
         enforceCallingOrSelfPermission(BLUETOOTH_ADMIN_PERM,
                                        "Need BLUETOOTH ADMIN permission");
 
@@ -233,10 +239,12 @@ public class A2dpService extends ProfileService {
         }
 
         mStateMachine.sendMessage(A2dpStateMachine.CONNECT, device);
+        if (DBG) Log.d(TAG, "Exit connect");
         return true;
     }
 
     boolean disconnect(BluetoothDevice device) {
+        if (DBG) Log.d(TAG, "Enter Disconnect");
         enforceCallingOrSelfPermission(BLUETOOTH_ADMIN_PERM,
                                        "Need BLUETOOTH ADMIN permission");
         int connectionState = mStateMachine.getConnectionState(device);
@@ -246,6 +254,7 @@ public class A2dpService extends ProfileService {
         }
 
         mStateMachine.sendMessage(A2dpStateMachine.DISCONNECT, device);
+        if (DBG) Log.d(TAG, "Exit disconnect");
         return true;
     }
 
@@ -265,21 +274,25 @@ public class A2dpService extends ProfileService {
     }
 
     public boolean setPriority(BluetoothDevice device, int priority) {
+        if (DBG) Log.d(TAG, "Enter setPriority");
         enforceCallingOrSelfPermission(BLUETOOTH_ADMIN_PERM,
                                        "Need BLUETOOTH_ADMIN permission");
         Settings.Global.putInt(getContentResolver(),
             Settings.Global.getBluetoothA2dpSinkPriorityKey(device.getAddress()),
             priority);
         if (DBG) Log.d(TAG,"Saved priority " + device + " = " + priority);
+        if (DBG) Log.d(TAG, "Exit setPriority");
         return true;
     }
 
     public int getPriority(BluetoothDevice device) {
+        if (DBG) Log.d(TAG, "Enter getPriority");
         enforceCallingOrSelfPermission(BLUETOOTH_ADMIN_PERM,
                                        "Need BLUETOOTH_ADMIN permission");
         int priority = Settings.Global.getInt(getContentResolver(),
             Settings.Global.getBluetoothA2dpSinkPriorityKey(device.getAddress()),
             BluetoothProfile.PRIORITY_UNDEFINED);
+        if (DBG) Log.d(TAG, "Exit getPriority");
         return priority;
     }
 
