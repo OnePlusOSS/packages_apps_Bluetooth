@@ -305,6 +305,19 @@ public class GattService extends ProfileService {
         }
     }
 
+    class ClientDeathRecipient implements IBinder.DeathRecipient {
+        int mAppIf;
+
+        public ClientDeathRecipient(int appIf) {
+            mAppIf = appIf;
+        }
+
+        public void binderDied() {
+            if (DBG) Log.d(TAG, "Binder is dead - unregistering client (" + mAppIf + ")!");
+            unregisterClient(mAppIf);
+        }
+    }
+
     /**
      * Handlers for incoming service calls
      */
@@ -675,6 +688,7 @@ public class GattService extends ProfileService {
         if (app != null) {
             if (status == 0) {
                 app.id = clientIf;
+                app.linkToDeath(new ClientDeathRecipient(clientIf));
             } else {
                 mClientMap.remove(uuid);
             }
@@ -1190,13 +1204,13 @@ public class GattService extends ProfileService {
         if (DBG) Log.d(TAG, "onAdvertiserStarted() - advertiserId=" + advertiserId +
             ", status=" + status);
 
-        mAdvertiseManager.callbackDone(advertiserId, status);
-
         AdvertiserMap.App app = mAdvertiserMap.getById(advertiserId);
         if (app != null) {
             if (status == 0) {
+                AdvertiseClient client = mAdvertiseManager.getAdvertiseClient(advertiserId);
+                AdvertiseSettings settings = (client == null) ? null : client.settings;
                 app.callback.onMultiAdvertiseCallback(AdvertiseCallback.ADVERTISE_SUCCESS,
-                        true, null);
+                        true, settings);
             } else {
                 app.callback.onMultiAdvertiseCallback(
                         AdvertiseCallback.ADVERTISE_FAILED_INTERNAL_ERROR, true, null);
@@ -1209,9 +1223,6 @@ public class GattService extends ProfileService {
                                     boolean enable) throws RemoteException {
         if (DBG) Log.d(TAG, "onAdvertiseInstanceEnabled() - "
                 + "advertiserId=" + advertiserId + ", status=" + status + ", enable=" + enable);
-
-        if (enable)
-            mAdvertiseManager.callbackDone(advertiserId, status);
 
         AdvertiserMap.App app = mAdvertiserMap.getById(advertiserId);
         if (app != null) {
@@ -1330,7 +1341,7 @@ public class GattService extends ProfileService {
         scanClient.legacyForegroundApp = Utils.isLegacyForegroundApp(this, callingPackage);
 
         AppScanStats app = null;
-        app = mClientMap.getAppScanStatsById(scannerId);
+        app = mScannerMap.getAppScanStatsById(scannerId);
 
         if (app != null) {
             if (app.isScanningTooFrequently() &&
@@ -1339,7 +1350,9 @@ public class GattService extends ProfileService {
                 return;
             }
             scanClient.stats = app;
-            app.recordScanStart(settings);
+
+            boolean isFilteredScan = (filters != null) && !filters.isEmpty();
+            app.recordScanStart(settings, isFilteredScan);
         }
 
         mScanManager.startScan(scanClient);
@@ -2174,7 +2187,10 @@ public class GattService extends ProfileService {
 
         println(sb, "mMaxScanFilters: " + mMaxScanFilters);
 
-        sb.append("\nGATT Client Map\n");
+        sb.append("\nGATT Scanner Map\n");
+        mScannerMap.dump(sb);
+
+        sb.append("GATT Client Map\n");
         mClientMap.dump(sb);
 
         sb.append("GATT Server Map\n");

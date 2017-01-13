@@ -37,6 +37,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.os.AsyncTask;
 import android.os.BatteryStats;
 import android.os.Binder;
 import android.os.Bundle;
@@ -52,6 +53,8 @@ import android.os.RemoteException;
 import android.os.ResultReceiver;
 import android.os.ServiceManager;
 import android.os.SystemClock;
+import android.os.UserHandle;
+import android.os.UserManager;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.Base64;
@@ -205,6 +208,7 @@ public class AdapterService extends Service {
     private PowerManager mPowerManager;
     private PowerManager.WakeLock mWakeLock;
     private String mWakeLockName;
+    private UserManager mUserManager;
 
     private ProfileObserver mProfileObserver;
 
@@ -536,6 +540,7 @@ public class AdapterService extends Service {
         getAdapterPropertyNative(AbstractionLayer.BT_PROPERTY_BDNAME);
         mAlarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
         mPowerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        mUserManager = (UserManager) getSystemService(Context.USER_SERVICE);
         mBatteryStats = IBatteryStats.Stub.asInterface(ServiceManager.getService(
                 BatteryStats.SERVICE_NAME));
 
@@ -545,6 +550,21 @@ public class AdapterService extends Service {
         mProfileObserver.start();
 
         setAdapterService(this);
+
+        // First call to getSharedPreferences will result in a file read into
+        // memory cache. Call it here asynchronously to avoid potential ANR
+        // in the future
+        new AsyncTask<Void, Void, Void>() {
+            @Override
+            protected Void doInBackground(Void... params) {
+                getSharedPreferences(
+                        PHONEBOOK_ACCESS_PERMISSION_PREFERENCE_FILE, Context.MODE_PRIVATE);
+                getSharedPreferences(
+                        MESSAGE_ACCESS_PERMISSION_PREFERENCE_FILE, Context.MODE_PRIVATE);
+                getSharedPreferences(SIM_ACCESS_PERMISSION_PREFERENCE_FILE, Context.MODE_PRIVATE);
+                return null;
+            }
+        }.execute();
     }
 
     @Override
@@ -1497,6 +1517,12 @@ public class AdapterService extends Service {
      public synchronized boolean enable(boolean quietMode) {
          enforceCallingOrSelfPermission(BLUETOOTH_ADMIN_PERM, "Need BLUETOOTH ADMIN permission");
 
+         // Enforce the user restriction for disallowing Bluetooth if it was set.
+         if (mUserManager.hasUserRestriction(UserManager.DISALLOW_BLUETOOTH, UserHandle.SYSTEM)) {
+            debugLog("enable() called when Bluetooth was disallowed");
+            return false;
+         }
+
          debugLog("enable() - Enable called with quiet mode status =  " + mQuietmode);
          mQuietmode = quietMode;
          Message m = mAdapterStateMachine.obtainMessage(AdapterState.BLE_TURN_ON);
@@ -2145,7 +2171,8 @@ public class AdapterService extends Service {
         } else {
             editor.putBoolean(device.getAddress(), value == BluetoothDevice.ACCESS_ALLOWED);
         }
-        return editor.commit();
+        editor.apply();
+        return true;
     }
 
     int getMessageAccessPermission(BluetoothDevice device) {
@@ -2170,7 +2197,8 @@ public class AdapterService extends Service {
         } else {
             editor.putBoolean(device.getAddress(), value == BluetoothDevice.ACCESS_ALLOWED);
         }
-        return editor.commit();
+        editor.apply();
+        return true;
     }
 
     int getSimAccessPermission(BluetoothDevice device) {
@@ -2195,7 +2223,8 @@ public class AdapterService extends Service {
         } else {
             editor.putBoolean(device.getAddress(), value == BluetoothDevice.ACCESS_ALLOWED);
         }
-        return editor.commit();
+        editor.apply();
+        return true;
     }
 
      void sendConnectionStateChange(BluetoothDevice
@@ -2523,31 +2552,15 @@ public class AdapterService extends Service {
         return getResources().getInteger(R.integer.config_bluetooth_operating_voltage_mv) / 1000.0;
     }
 
-    private String getStateString() {
-        int state = getState();
-        switch (state) {
-            case BluetoothAdapter.STATE_OFF:
-                return "STATE_OFF";
-            case BluetoothAdapter.STATE_TURNING_ON:
-                return "STATE_TURNING_ON";
-            case BluetoothAdapter.STATE_ON:
-                return "STATE_ON";
-            case BluetoothAdapter.STATE_TURNING_OFF:
-                return "STATE_TURNING_OFF";
-            case BluetoothAdapter.STATE_BLE_TURNING_ON:
-                return "STATE_BLE_TURNING_ON";
-            case BluetoothAdapter.STATE_BLE_ON:
-                return "STATE_BLE_ON";
-            case BluetoothAdapter.STATE_BLE_TURNING_OFF:
-                return "STATE_BLE_TURNING_OFF";
-            default:
-                return "UNKNOWN STATE: " + state;
-        }
-    }
-
     @Override
     protected void dump(FileDescriptor fd, PrintWriter writer, String[] args) {
         enforceCallingOrSelfPermission(android.Manifest.permission.DUMP, TAG);
+
+        if (args.length == 0) {
+            writer.println("Skipping dump in APP SERVICES, see bluetooth_manager section.");
+            writer.println("Use --print argument for dumpsys direct from AdapterService.");
+            return;
+        }
 
         if (args.length > 0) {
             verboseLog("dumpsys arguments, check for protobuf output: "
@@ -2561,20 +2574,6 @@ public class AdapterService extends Service {
                 return;
             }
         }
-
-        long onDuration = System.currentTimeMillis() - mBluetoothStartTime;
-        String onDurationString = String.format("%02d:%02d:%02d.%03d",
-                                      (int)(onDuration / (1000 * 60 * 60)),
-                                      (int)((onDuration / (1000 * 60)) % 60),
-                                      (int)((onDuration / 1000) % 60),
-                                      (int)(onDuration % 1000));
-
-        writer.println("Bluetooth Status");
-        writer.println("  enabled: " + isEnabled());
-        writer.println("  state: " + getStateString());
-        writer.println("  address: " + getAddress());
-        writer.println("  name: " + getName());
-        writer.println("  time since enabled: " + onDurationString + "\n");
 
         writer.println("Bonded devices:");
         for (BluetoothDevice device : getBondedDevices()) {

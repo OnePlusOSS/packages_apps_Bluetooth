@@ -41,9 +41,6 @@ class AdvertiseManager {
     private static final boolean DBG = GattServiceConfig.DBG;
     private static final String TAG = GattServiceConfig.TAG_PREFIX + "AdvertiseManager";
 
-    // Timeout for each controller operation.
-    private static final int OPERATION_TIME_OUT_MILLIS = 500;
-
     // Message for advertising operations.
     private static final int MSG_START_ADVERTISING = 0;
     private static final int MSG_STOP_ADVERTISING = 1;
@@ -55,9 +52,6 @@ class AdvertiseManager {
 
     // Handles advertise operations.
     private ClientHandler mHandler;
-
-    // CountDownLatch for blocking advertise operations.
-    private CountDownLatch mLatch;
 
     /**
      * Constructor of {@link AdvertiseManager}.
@@ -131,22 +125,6 @@ class AdvertiseManager {
         mHandler.sendMessage(message);
     }
 
-    /**
-     * Signals the callback is received.
-     *
-     * @param advertiserId Identifier for the client.
-     * @param status Status of the callback.
-     */
-    void callbackDone(int advertiserId, int status) {
-        if (status == AdvertiseCallback.ADVERTISE_SUCCESS) {
-            mLatch.countDown();
-        } else {
-            // Note in failure case we'll wait for the latch to timeout(which takes 100ms) and
-            // the mClientHandler thread will be blocked till timeout.
-            postCallback(advertiserId, AdvertiseCallback.ADVERTISE_FAILED_INTERNAL_ERROR);
-        }
-    }
-
     // Post callback status to app process.
     private void postCallback(int advertiserId, int status) {
         try {
@@ -159,7 +137,7 @@ class AdvertiseManager {
         }
     }
 
-    private AdvertiseClient getAdvertiseClient(int advertiserId) {
+    public AdvertiseClient getAdvertiseClient(int advertiserId) {
         for (AdvertiseClient client : mAdvertiseClients) {
             if (client.advertiserId == advertiserId) {
                 return client;
@@ -201,11 +179,7 @@ class AdvertiseManager {
                 return;
             }
 
-            if (!mAdvertiseNative.startAdverising(client)) {
-                postCallback(advertiserId, AdvertiseCallback.ADVERTISE_FAILED_INTERNAL_ERROR);
-                return;
-            }
-
+            mAdvertiseNative.startAdverising(client);
             mAdvertiseClients.add(client);
         }
 
@@ -241,13 +215,22 @@ class AdvertiseManager {
         private static final int ADVERTISING_CHANNEL_ALL =
             ADVERTISING_CHANNEL_37 | ADVERTISING_CHANNEL_38 | ADVERTISING_CHANNEL_39;
 
-        boolean startAdverising(AdvertiseClient client) {
+        private static final int ADVERTISING_PHY_LE_1M = 0X01;
+        private static final int ADVERTISING_PHY_LE_2M =
+            0X02; // only for secondary advertising channel
+        private static final int ADVERTISING_PHY_LE_CODED = 0X03;
+
+        private static final int SCAN_REQUEST_NOTIFICATIONS_DISABLE = 0X00;
+        private static final int SCAN_REQUEST_NOTIFICATIONS_ENABLE = 0X01;
+
+        void startAdverising(AdvertiseClient client) {
             logd("starting advertising");
 
             int advertiserId = client.advertiserId;
+            int advertisingEventProperties =
+                AdvertiseHelper.getAdvertisingEventProperties(client);
             int minAdvertiseUnit = (int) AdvertiseHelper.getAdvertisingIntervalUnit(client.settings);
             int maxAdvertiseUnit = minAdvertiseUnit + ADVERTISING_INTERVAL_DELTA_UNIT;
-            int advertiseEventType = AdvertiseHelper.getAdvertisingEventType(client);
             int txPowerLevel = AdvertiseHelper.getTxPowerLevel(client.settings);
 
             byte [] adv_data = AdvertiseHelper.advertiseDataToBytes(client.advertiseData,
@@ -258,37 +241,19 @@ class AdvertiseManager {
             int advertiseTimeoutSeconds = (int) TimeUnit.MILLISECONDS.toSeconds(
                     client.settings.getTimeout());
 
-            resetCountDownLatch();
-
-            startAdvertiserNative(advertiserId, minAdvertiseUnit, maxAdvertiseUnit,
-                    advertiseEventType, ADVERTISING_CHANNEL_ALL, txPowerLevel, adv_data,
-                    scan_resp_data, advertiseTimeoutSeconds);
-            if (!waitForCallback()) {
-                return false;
-            }
-
-            return true;
+            startAdvertiserNative(advertiserId, advertisingEventProperties,
+                                  minAdvertiseUnit, maxAdvertiseUnit,
+                                  ADVERTISING_CHANNEL_ALL, txPowerLevel,
+                                  ADVERTISING_PHY_LE_1M, ADVERTISING_PHY_LE_1M,
+                                  SCAN_REQUEST_NOTIFICATIONS_DISABLE, adv_data,
+                                  scan_resp_data, advertiseTimeoutSeconds);
         }
 
         void stopAdvertising(AdvertiseClient client) {
             gattClientEnableAdvNative(client.advertiserId, false, 0);
         }
 
-        private void resetCountDownLatch() {
-            mLatch = new CountDownLatch(1);
-        }
-
-        // Returns true if mLatch reaches 0, false if timeout or interrupted.
-        private boolean waitForCallback() {
-            try {
-                return mLatch.await(OPERATION_TIME_OUT_MILLIS, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                return false;
-            }
-        }
-
         // Native functions
-
         private native void registerAdvertiserNative(long app_uuid_lsb,
                                                      long app_uuid_msb);
 
@@ -297,10 +262,12 @@ class AdvertiseManager {
         private native void gattClientEnableAdvNative(int advertiserId,
                 boolean enable, int timeout_s);
 
-        private native void startAdvertiserNative(int advertiserId,
-                int min_interval, int max_interval, int adv_type, int chnl_map, int tx_power,
-                byte[] adv_data, byte[] scan_resp_data, int timeout_s);
-
+        private native void startAdvertiserNative(
+            int advertiserId, int advertising_event_properties,
+            int min_interval, int max_interval, int chnl_map, int tx_power,
+            int primary_advertising_phy, int secondary_advertising_phy,
+            int scan_request_notification_enable, byte[] adv_data,
+            byte[] scan_resp_data, int timeout_s);
     }
 
     private void logd(String s) {
