@@ -212,6 +212,10 @@ public class BluetoothOppSendFileInfo {
         if (length == 0) {
             Log.e(TAG, "Could not determine size of file");
             return SEND_FILE_INFO_ERROR;
+        } else if (length > 0xffffffffL) {
+            String msg = "Files bigger than 4GB can't be transferred";
+            Log.e(TAG, msg);
+            throw new IllegalArgumentException(msg);
         }
 
         return new BluetoothOppSendFileInfo(fileName, contentType, length, is, 0);
@@ -220,8 +224,10 @@ public class BluetoothOppSendFileInfo {
     private static long getStreamSize(FileInputStream is) throws IOException {
         long length = 0;
         byte unused[] = new byte[4096];
-        while (is.available() > 0) {
-            length += is.read(unused, 0, 4096);
+        int bytesRead = is.read(unused, 0, 4096);
+        while (bytesRead != -1) {
+            length += bytesRead;
+            bytesRead = is.read(unused, 0, 4096);
         }
         return length;
     }
