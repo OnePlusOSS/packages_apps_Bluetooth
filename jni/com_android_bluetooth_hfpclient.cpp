@@ -50,6 +50,20 @@ static jmethodID method_onInBandRing;
 static jmethodID method_onLastVoiceTagNumber;
 static jmethodID method_onRingIndication;
 
+static jbyteArray marshall_bda(const bt_bdaddr_t* bd_addr) {
+  CallbackEnv sCallbackEnv(__func__);
+  if (!sCallbackEnv.valid()) return NULL;
+
+  jbyteArray addr = sCallbackEnv->NewByteArray(sizeof(bt_bdaddr_t));
+  if (!addr) {
+    ALOGE("Fail to new jbyteArray bd addr");
+    return NULL;
+  }
+  sCallbackEnv->SetByteArrayRegion(addr, 0, sizeof(bt_bdaddr_t),
+                                   (jbyte*)bd_addr);
+  return addr;
+}
+
 static void connection_state_cb(const bt_bdaddr_t* bd_addr,
                                 bthf_client_connection_state_t state,
                                 unsigned int peer_feat,
@@ -57,18 +71,13 @@ static void connection_state_cb(const bt_bdaddr_t* bd_addr,
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid()) return;
 
-  jbyteArray addr = sCallbackEnv->NewByteArray(sizeof(const bt_bdaddr_t));
-  if (!addr) {
-    ALOGE("Fail to new jbyteArray bd addr for connection state");
-    return;
-  }
+  ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(), marshall_bda(bd_addr));
+  if (!addr.get()) return;
 
-  sCallbackEnv->SetByteArrayRegion(addr, 0, sizeof(const bt_bdaddr_t),
-                                   (jbyte*)bd_addr);
+  ALOGD("%s: state %d peer_feat %d chld_feat %d", __func__, state, peer_feat, chld_feat);
   sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onConnectionStateChanged,
                                (jint)state, (jint)peer_feat, (jint)chld_feat,
-                               addr);
-  sCallbackEnv->DeleteLocalRef(addr);
+                               addr.get());
 }
 
 static void audio_state_cb(const bt_bdaddr_t* bd_addr,
@@ -76,17 +85,11 @@ static void audio_state_cb(const bt_bdaddr_t* bd_addr,
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid()) return;
 
-  jbyteArray addr = sCallbackEnv->NewByteArray(sizeof(const bt_bdaddr_t));
-  if (!addr) {
-    ALOGE("Fail to new jbyteArray bd addr for audio state");
-    return;
-  }
+  ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(), marshall_bda(bd_addr));
+  if (!addr.get()) return;
 
-  sCallbackEnv->SetByteArrayRegion(addr, 0, sizeof(const bt_bdaddr_t),
-                                   (jbyte*)bd_addr);
   sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onAudioStateChanged,
-                               (jint)state, addr);
-  sCallbackEnv->DeleteLocalRef(addr);
+                               (jint)state, addr.get());
 }
 
 static void vr_cmd_cb(const bt_bdaddr_t* bd_addr,
@@ -101,88 +104,134 @@ static void network_state_cb(const bt_bdaddr_t* bd_addr,
                              bthf_client_network_state_t state) {
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid()) return;
+
+  ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(), marshall_bda(bd_addr));
+  if (!addr.get()) return;
+
   sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onNetworkState,
-                               (jint)state);
+                               (jint)state, addr.get());
 }
 
 static void network_roaming_cb(const bt_bdaddr_t* bd_addr,
                                bthf_client_service_type_t type) {
   CallbackEnv sCallbackEnv(__func__);
-  if (!sCallbackEnv.valid()) return;
+
+  ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(), marshall_bda(bd_addr));
+  if (!addr.get()) return;
+
   sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onNetworkRoaming,
-                               (jint)type);
+                               (jint)type, addr.get());
 }
 
 static void network_signal_cb(const bt_bdaddr_t* bd_addr, int signal) {
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid()) return;
+
+  ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(), marshall_bda(bd_addr));
+  if (!addr.get()) return;
+
   sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onNetworkSignal,
-                               (jint)signal);
+                               (jint)signal, addr.get());
 }
 
 static void battery_level_cb(const bt_bdaddr_t* bd_addr, int level) {
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid()) return;
+
+  ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(), marshall_bda(bd_addr));
+  if (!addr.get()) return;
+
   sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onBatteryLevel,
-                               (jint)level);
+                               (jint)level, addr.get());
 }
 
 static void current_operator_cb(const bt_bdaddr_t* bd_addr, const char* name) {
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid()) return;
 
-  jstring js_name = sCallbackEnv->NewStringUTF(name);
+  ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(), marshall_bda(bd_addr));
+  if (!addr.get()) return;
+
+  ScopedLocalRef<jstring> js_name(sCallbackEnv.get(),
+                                  sCallbackEnv->NewStringUTF(name));
   sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onCurrentOperator,
-                               js_name);
-  sCallbackEnv->DeleteLocalRef(js_name);
+                               js_name.get(), addr.get());
 }
 
 static void call_cb(const bt_bdaddr_t* bd_addr, bthf_client_call_t call) {
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid()) return;
-  sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onCall, (jint)call);
+
+  ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(), marshall_bda(bd_addr));
+  if (!addr.get()) return;
+
+  sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onCall, (jint)call,
+                               addr.get());
 }
 
 static void callsetup_cb(const bt_bdaddr_t* bd_addr,
                          bthf_client_callsetup_t callsetup) {
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid()) return;
+
+  ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(), marshall_bda(bd_addr));
+  if (!addr.get()) return;
+
+  ALOGD("callsetup_cb bdaddr %02x:%02x:%02x:%02x:%02x:%02x", addr.get()[0],
+        addr.get()[1], addr.get()[2], addr.get()[3], addr.get()[4],
+        addr.get()[5]);
+
   sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onCallSetup,
-                               (jint)callsetup);
+                               (jint)callsetup, addr.get());
 }
 
 static void callheld_cb(const bt_bdaddr_t* bd_addr,
                         bthf_client_callheld_t callheld) {
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid()) return;
-  sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onCallHeld,
-                               (jint)callheld);
+
+  ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(), marshall_bda(bd_addr));
+  if (!addr.get()) return;
+
+  sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onCallHeld, (jint)callheld,
+                               addr.get());
 }
 
 static void resp_and_hold_cb(const bt_bdaddr_t* bd_addr,
                              bthf_client_resp_and_hold_t resp_and_hold) {
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid()) return;
+
+  ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(), marshall_bda(bd_addr));
+  if (!addr.get()) return;
+
   sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onRespAndHold,
-                               (jint)resp_and_hold);
+                               (jint)resp_and_hold, addr.get());
 }
 
 static void clip_cb(const bt_bdaddr_t* bd_addr, const char* number) {
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid()) return;
 
-  jstring js_number = sCallbackEnv->NewStringUTF(number);
-  sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onClip, js_number);
-  sCallbackEnv->DeleteLocalRef(js_number);
+  ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(), marshall_bda(bd_addr));
+  if (!addr.get()) return;
+
+  ScopedLocalRef<jstring> js_number(sCallbackEnv.get(),
+                                    sCallbackEnv->NewStringUTF(number));
+  sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onClip, js_number.get(),
+                               addr.get());
 }
 
 static void call_waiting_cb(const bt_bdaddr_t* bd_addr, const char* number) {
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid()) return;
 
-  jstring js_number = sCallbackEnv->NewStringUTF(number);
-  sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onCallWaiting, js_number);
-  sCallbackEnv->DeleteLocalRef(js_number);
+  ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(), marshall_bda(bd_addr));
+  if (!addr.get()) return;
+  ScopedLocalRef<jstring> js_number(sCallbackEnv.get(),
+                                    sCallbackEnv->NewStringUTF(number));
+  sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onCallWaiting,
+                               js_number.get(), addr.get());
 }
 
 static void current_calls_cb(const bt_bdaddr_t* bd_addr, int index,
@@ -193,26 +242,34 @@ static void current_calls_cb(const bt_bdaddr_t* bd_addr, int index,
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid()) return;
 
-  jstring js_number = sCallbackEnv->NewStringUTF(number);
+  ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(), marshall_bda(bd_addr));
+  if (!addr.get()) return;
+  ScopedLocalRef<jstring> js_number(sCallbackEnv.get(),
+                                    sCallbackEnv->NewStringUTF(number));
   sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onCurrentCalls, index, dir,
-                               state, mpty, js_number);
-  sCallbackEnv->DeleteLocalRef(js_number);
+                               state, mpty, js_number.get(), addr.get());
 }
 
 static void volume_change_cb(const bt_bdaddr_t* bd_addr,
                              bthf_client_volume_type_t type, int volume) {
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid()) return;
+
+  ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(), marshall_bda(bd_addr));
+  if (!addr.get()) return;
   sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onVolumeChange, (jint)type,
-                               (jint)volume);
+                               (jint)volume, addr.get());
 }
 
 static void cmd_complete_cb(const bt_bdaddr_t* bd_addr,
                             bthf_client_cmd_complete_t type, int cme) {
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid()) return;
+
+  ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(), marshall_bda(bd_addr));
+  if (!addr.get()) return;
   sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onCmdResult, (jint)type,
-                               (jint)cme);
+                               (jint)cme, addr.get());
 }
 
 static void subscriber_info_cb(const bt_bdaddr_t* bd_addr, const char* name,
@@ -220,18 +277,23 @@ static void subscriber_info_cb(const bt_bdaddr_t* bd_addr, const char* name,
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid()) return;
 
-  jstring js_name = sCallbackEnv->NewStringUTF(name);
-  sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onSubscriberInfo, js_name,
-                               (jint)type);
-  sCallbackEnv->DeleteLocalRef(js_name);
+  ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(), marshall_bda(bd_addr));
+  if (!addr.get()) return;
+  ScopedLocalRef<jstring> js_name(sCallbackEnv.get(),
+                                  sCallbackEnv->NewStringUTF(name));
+  sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onSubscriberInfo,
+                               js_name.get(), (jint)type, addr.get());
 }
 
 static void in_band_ring_cb(const bt_bdaddr_t* bd_addr,
                             bthf_client_in_band_ring_state_t in_band) {
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid()) return;
+
+  ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(), marshall_bda(bd_addr));
+  if (!addr.get()) return;
   sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onInBandRing,
-                               (jint)in_band);
+                               (jint)in_band, addr.get());
 }
 
 static void last_voice_tag_number_cb(const bt_bdaddr_t* bd_addr,
@@ -239,16 +301,22 @@ static void last_voice_tag_number_cb(const bt_bdaddr_t* bd_addr,
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid()) return;
 
-  jstring js_number = sCallbackEnv->NewStringUTF(number);
+  ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(), marshall_bda(bd_addr));
+  if (!addr.get()) return;
+  ScopedLocalRef<jstring> js_number(sCallbackEnv.get(),
+                                    sCallbackEnv->NewStringUTF(number));
   sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onLastVoiceTagNumber,
-                               js_number);
-  sCallbackEnv->DeleteLocalRef(js_number);
+                               js_number.get(), addr.get());
 }
 
 static void ring_indication_cb(const bt_bdaddr_t* bd_addr) {
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid()) return;
-  sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onRingIndication);
+
+  ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(), marshall_bda(bd_addr));
+  if (!addr.get()) return;
+  sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onRingIndication,
+                               addr.get());
 }
 
 static bthf_client_callbacks_t sBluetoothHfpClientCallbacks = {
@@ -282,34 +350,35 @@ static void classInitNative(JNIEnv* env, jclass clazz) {
   method_onAudioStateChanged =
       env->GetMethodID(clazz, "onAudioStateChanged", "(I[B)V");
   method_onVrStateChanged = env->GetMethodID(clazz, "onVrStateChanged", "(I)V");
-  method_onNetworkState = env->GetMethodID(clazz, "onNetworkState", "(I)V");
-  method_onNetworkRoaming = env->GetMethodID(clazz, "onNetworkRoaming", "(I)V");
-  method_onNetworkSignal = env->GetMethodID(clazz, "onNetworkSignal", "(I)V");
-  method_onBatteryLevel = env->GetMethodID(clazz, "onBatteryLevel", "(I)V");
+  method_onNetworkState = env->GetMethodID(clazz, "onNetworkState", "(I[B)V");
+  method_onNetworkRoaming = env->GetMethodID(clazz, "onNetworkRoaming", "(I[B)V");
+  method_onNetworkSignal = env->GetMethodID(clazz, "onNetworkSignal", "(I[B)V");
+  method_onBatteryLevel = env->GetMethodID(clazz, "onBatteryLevel", "(I[B)V");
   method_onCurrentOperator =
-      env->GetMethodID(clazz, "onCurrentOperator", "(Ljava/lang/String;)V");
-  method_onCall = env->GetMethodID(clazz, "onCall", "(I)V");
-  method_onCallSetup = env->GetMethodID(clazz, "onCallSetup", "(I)V");
-  method_onCallHeld = env->GetMethodID(clazz, "onCallHeld", "(I)V");
-  method_onRespAndHold = env->GetMethodID(clazz, "onRespAndHold", "(I)V");
-  method_onClip = env->GetMethodID(clazz, "onClip", "(Ljava/lang/String;)V");
+      env->GetMethodID(clazz, "onCurrentOperator", "(Ljava/lang/String;[B)V");
+  method_onCall = env->GetMethodID(clazz, "onCall", "(I[B)V");
+  method_onCallSetup = env->GetMethodID(clazz, "onCallSetup", "(I[B)V");
+  method_onCallHeld = env->GetMethodID(clazz, "onCallHeld", "(I[B)V");
+  method_onRespAndHold = env->GetMethodID(clazz, "onRespAndHold", "(I[B)V");
+  method_onClip = env->GetMethodID(clazz, "onClip", "(Ljava/lang/String;[B)V");
   method_onCallWaiting =
-      env->GetMethodID(clazz, "onCallWaiting", "(Ljava/lang/String;)V");
+      env->GetMethodID(clazz, "onCallWaiting", "(Ljava/lang/String;[B)V");
   method_onCurrentCalls =
-      env->GetMethodID(clazz, "onCurrentCalls", "(IIIILjava/lang/String;)V");
-  method_onVolumeChange = env->GetMethodID(clazz, "onVolumeChange", "(II)V");
-  method_onCmdResult = env->GetMethodID(clazz, "onCmdResult", "(II)V");
+      env->GetMethodID(clazz, "onCurrentCalls", "(IIIILjava/lang/String;[B)V");
+  method_onVolumeChange = env->GetMethodID(clazz, "onVolumeChange", "(II[B)V");
+  method_onCmdResult = env->GetMethodID(clazz, "onCmdResult", "(II[B)V");
   method_onSubscriberInfo =
-      env->GetMethodID(clazz, "onSubscriberInfo", "(Ljava/lang/String;I)V");
-  method_onInBandRing = env->GetMethodID(clazz, "onInBandRing", "(I)V");
+      env->GetMethodID(clazz, "onSubscriberInfo", "(Ljava/lang/String;I[B)V");
+  method_onInBandRing = env->GetMethodID(clazz, "onInBandRing", "(I[B)V");
   method_onLastVoiceTagNumber =
-      env->GetMethodID(clazz, "onLastVoiceTagNumber", "(Ljava/lang/String;)V");
-  method_onRingIndication = env->GetMethodID(clazz, "onRingIndication", "()V");
+      env->GetMethodID(clazz, "onLastVoiceTagNumber", "(Ljava/lang/String;[B)V");
+  method_onRingIndication = env->GetMethodID(clazz, "onRingIndication", "([B)V");
 
   ALOGI("%s succeeds", __func__);
 }
 
 static void initializeNative(JNIEnv* env, jobject object) {
+  ALOGD("%s: HfpClient", __func__);
   const bt_interface_t* btInf = getBluetoothInterface();
   if (btInf == NULL) {
     ALOGE("Bluetooth module is not loaded");
@@ -729,7 +798,7 @@ static JNINativeMethod sMethods[] = {
 
 int register_com_android_bluetooth_hfpclient(JNIEnv* env) {
   return jniRegisterNativeMethods(
-      env, "com/android/bluetooth/hfpclient/HeadsetClientStateMachine",
+      env, "com/android/bluetooth/hfpclient/NativeInterface",
       sMethods, NELEM(sMethods));
 }
 
