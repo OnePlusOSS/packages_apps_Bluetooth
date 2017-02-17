@@ -114,7 +114,7 @@ public class HfpClientConnection extends Connection {
     }
 
     public boolean inConference() {
-        return mAdded && mCurrentCall.isMultiParty() &&
+        return mAdded && mCurrentCall != null && mCurrentCall.isMultiParty() &&
                 getState() != Connection.STATE_DISCONNECTED;
     }
 
@@ -187,6 +187,10 @@ public class HfpClientConnection extends Connection {
 
     public synchronized boolean isClosing() {
         return mClosing;
+    }
+
+    public synchronized BluetoothDevice getDevice() {
+        return mDevice;
     }
 
     @Override

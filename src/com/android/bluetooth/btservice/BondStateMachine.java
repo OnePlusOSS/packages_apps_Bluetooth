@@ -33,6 +33,7 @@ import android.os.Message;
 import android.os.UserHandle;
 import android.util.Log;
 
+import com.android.bluetooth.R;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.RemoteDevices.DeviceProperties;
 import com.android.internal.util.State;
@@ -176,8 +177,6 @@ final class BondStateMachine extends StateMachine {
                  deferMessage(msg);
                  return true;
              }
-
-            Intent intent = new Intent(BluetoothDevice.ACTION_PAIRING_REQUEST);
 
             switch (msg.what) {
                 case CREATE_BOND:
@@ -326,6 +325,7 @@ final class BondStateMachine extends StateMachine {
         }
         intent.putExtra(BluetoothDevice.EXTRA_PAIRING_VARIANT, variant);
         intent.setFlags(Intent.FLAG_RECEIVER_FOREGROUND);
+        intent.setPackage(mAdapterService.getString(R.string.pairing_ui_package));
         mAdapterService.sendOrderedBroadcast(intent, mAdapterService.BLUETOOTH_ADMIN_PERM);
     }
 
@@ -344,6 +344,7 @@ final class BondStateMachine extends StateMachine {
         intent.putExtra(BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE, oldState);
         if (newState == BluetoothDevice.BOND_NONE)
             intent.putExtra(BluetoothDevice.EXTRA_REASON, reason);
+        intent.setPackage(mAdapterService.getString(R.string.pairing_ui_package));
         mAdapterService.sendBroadcastAsUser(intent, UserHandle.ALL,
                 AdapterService.BLUETOOTH_PERM);
         infoLog("Bond State Change Intent:" + device + " OldState: " + oldState

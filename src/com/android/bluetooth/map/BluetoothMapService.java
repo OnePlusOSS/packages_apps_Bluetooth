@@ -41,11 +41,11 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.util.SparseArray;
 
+import com.android.bluetooth.R;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.ProfileService;
 import com.android.bluetooth.btservice.ProfileService.IProfileServiceBinder;
-import com.android.bluetooth.R;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -153,11 +153,6 @@ public class BluetoothMapService extends ProfileService {
 
     private boolean mSmsCapable = true;
 
-    // package and class name to which we send intent to check phone book access permission
-    private static final String ACCESS_AUTHORITY_PACKAGE = "com.android.settings";
-    private static final String ACCESS_AUTHORITY_CLASS =
-        "com.android.settings.bluetooth.BluetoothPermissionRequest";
-
     private static final ParcelUuid[] MAP_UUIDS = {
         BluetoothUuid.MAP,
         BluetoothUuid.MNS,
@@ -165,7 +160,6 @@ public class BluetoothMapService extends ProfileService {
 
     public BluetoothMapService() {
         mState = BluetoothMap.STATE_DISCONNECTED;
-
     }
 
 
@@ -361,12 +355,12 @@ public class BluetoothMapService extends ProfileService {
                     stopObexServerSessions(-1);
                     break;
                 case USER_TIMEOUT:
-                    if (mIsWaitingAuthorization){
+                    if (mIsWaitingAuthorization) {
                         Intent intent = new Intent(BluetoothDevice.ACTION_CONNECTION_ACCESS_CANCEL);
-                        intent.setClassName(ACCESS_AUTHORITY_PACKAGE, ACCESS_AUTHORITY_CLASS);
+                        intent.setPackage(getString(R.string.pairing_ui_package));
                         intent.putExtra(BluetoothDevice.EXTRA_DEVICE, mRemoteDevice);
                         intent.putExtra(BluetoothDevice.EXTRA_ACCESS_REQUEST_TYPE,
-                                        BluetoothDevice.REQUEST_TYPE_MESSAGE_ACCESS);
+                                BluetoothDevice.REQUEST_TYPE_MESSAGE_ACCESS);
                         sendBroadcast(intent);
                         cancelUserTimeoutAlarm();
                         mIsWaitingAuthorization = false;
@@ -873,7 +867,7 @@ public class BluetoothMapService extends ProfileService {
         if (sendIntent) {
             // This will trigger Settings app's dialog.
             Intent intent = new Intent(BluetoothDevice.ACTION_CONNECTION_ACCESS_REQUEST);
-            intent.setClassName(ACCESS_AUTHORITY_PACKAGE, ACCESS_AUTHORITY_CLASS);
+            intent.setPackage(getString(R.string.pairing_ui_package));
             intent.putExtra(BluetoothDevice.EXTRA_ACCESS_REQUEST_TYPE,
                             BluetoothDevice.REQUEST_TYPE_MESSAGE_ACCESS);
             intent.putExtra(BluetoothDevice.EXTRA_DEVICE, mRemoteDevice);
@@ -1127,19 +1121,9 @@ public class BluetoothMapService extends ProfileService {
                 if (VERBOSE) Log.v(TAG,"ACL disconnected for " + device);
 
                 if (mRemoteDevice.equals(device)) {
-                    // Send any pending timeout now, as ACL got disconnected.
+                    // Send any pending timeout now, since ACL got disconnected
                     mSessionStatusHandler.removeMessages(USER_TIMEOUT);
-
-                    Intent timeoutIntent =
-                            new Intent(BluetoothDevice.ACTION_CONNECTION_ACCESS_CANCEL);
-                    timeoutIntent.putExtra(BluetoothDevice.EXTRA_DEVICE, mRemoteDevice);
-                    timeoutIntent.putExtra(BluetoothDevice.EXTRA_ACCESS_REQUEST_TYPE,
-                                           BluetoothDevice.REQUEST_TYPE_MESSAGE_ACCESS);
-                    sendBroadcast(timeoutIntent, BLUETOOTH_PERM);
-                    mIsWaitingAuthorization = false;
-                    cancelUserTimeoutAlarm();
-                    mSessionStatusHandler.obtainMessage(MSG_SERVERSESSION_CLOSE, -1, 0)
-                            .sendToTarget();
+                    mSessionStatusHandler.obtainMessage(USER_TIMEOUT).sendToTarget();
                 }
             }
         }

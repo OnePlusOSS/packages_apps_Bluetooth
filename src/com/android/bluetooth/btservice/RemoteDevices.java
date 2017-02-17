@@ -24,6 +24,7 @@ import android.os.Handler;
 import android.os.Message;
 import android.os.ParcelUuid;
 import android.util.Log;
+import com.android.bluetooth.R;
 import com.android.bluetooth.Utils;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -398,12 +399,8 @@ final class RemoteDevices {
             return;
         }
         int state = mAdapterService.getState();
-        Log.e(TAG, "state" + state + "newState" + newState);
+        Log.e(TAG, "state " + BluetoothAdapter.nameForState(state) + " newState " + newState);
 
-        DeviceProperties prop = getDeviceProperties(device);
-        if (prop == null) {
- //         errorLog("aclStateChangeCallback reported unknown device " + Arrays.toString(address));
-        }
         Intent intent = null;
         if (newState == AbstractionLayer.BT_ACL_STATE_CONNECTED) {
             if (state == BluetoothAdapter.STATE_ON || state == BluetoothAdapter.STATE_TURNING_ON) {
@@ -411,12 +408,13 @@ final class RemoteDevices {
             } else if (state == BluetoothAdapter.STATE_BLE_ON || state == BluetoothAdapter.STATE_BLE_TURNING_ON) {
                 intent = new Intent(BluetoothAdapter.ACTION_BLE_ACL_CONNECTED);
             }
-            debugLog("aclStateChangeCallback: State:Connected to Device:" + device);
+            debugLog("aclStateChangeCallback: Connected: " + device);
         } else {
             if (device.getBondState() == BluetoothDevice.BOND_BONDING) {
-                /*Broadcasting PAIRING_CANCEL intent as well in this case*/
+                // Send PAIRING_CANCEL intent to dismiss any dialog requesting bonding.
                 intent = new Intent(BluetoothDevice.ACTION_PAIRING_CANCEL);
                 intent.putExtra(BluetoothDevice.EXTRA_DEVICE, device);
+                intent.setPackage(mAdapterService.getString(R.string.pairing_ui_package));
                 mAdapterService.sendBroadcast(intent, mAdapterService.BLUETOOTH_PERM);
             }
             if (state == BluetoothAdapter.STATE_ON || state == BluetoothAdapter.STATE_TURNING_OFF) {
@@ -424,7 +422,7 @@ final class RemoteDevices {
             } else if (state == BluetoothAdapter.STATE_BLE_ON || state == BluetoothAdapter.STATE_BLE_TURNING_OFF) {
                 intent = new Intent(BluetoothAdapter.ACTION_BLE_ACL_DISCONNECTED);
             }
-            debugLog("aclStateChangeCallback: State:DisConnected to Device:" + device);
+            debugLog("aclStateChangeCallback: Disconnected: " + device);
         }
         intent.putExtra(BluetoothDevice.EXTRA_DEVICE, device);
         intent.addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT);
