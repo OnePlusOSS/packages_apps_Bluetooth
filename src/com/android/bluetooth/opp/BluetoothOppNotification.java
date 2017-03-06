@@ -108,6 +108,9 @@ class BluetoothOppNotification {
     private int mActiveNotificationId = 0;
 
     private ContentResolver mContentResolver = null;
+
+    private boolean mBtTurnedOff = false;
+
     /**
      * This inner class is used to describe some properties for one transfer.
      */
@@ -509,6 +512,11 @@ class BluetoothOppNotification {
         for (cursor.moveToFirst(); !cursor.isAfterLast(); cursor.moveToNext()) {
           BluetoothOppTransferInfo info = new BluetoothOppTransferInfo();
           BluetoothOppUtility.fillRecord(mContext, cursor, info);
+          if (mBtTurnedOff) {
+              mNotificationMgr.cancel(info.mID);
+              Log.d(TAG, " Cleared incoming ID :" + info.mID);
+              continue;
+          }
           Uri contentUri = Uri.parse(BluetoothShare.CONTENT_URI + "/" + info.mID);
           Intent baseIntent = new Intent().setDataAndNormalize(contentUri)
               .setClassName(Constants.THIS_PACKAGE_NAME, BluetoothOppReceiver.class.getName());
@@ -560,5 +568,10 @@ class BluetoothOppNotification {
           mNotificationMgr.notify(info.mID, n);
         }
         cursor.close();
+    }
+
+    protected void updateNotifier() {
+        mBtTurnedOff = true;
+        updateNotification();
     }
 }
