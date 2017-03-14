@@ -1332,6 +1332,30 @@ public class AdapterService extends Service {
              return (val >= MIN_OFFLOADED_SCAN_STORAGE_BYTES);
          }
 
+         public boolean isLe2MPhySupported() {
+             AdapterService service = getService();
+             if (service == null) return false;
+             return service.isLe2MPhySupported();
+         }
+
+         public boolean isLeCodedPhySupported() {
+             AdapterService service = getService();
+             if (service == null) return false;
+             return service.isLeCodedPhySupported();
+         }
+
+         public boolean isLeExtendedAdvertisingSupported() {
+             AdapterService service = getService();
+             if (service == null) return false;
+             return service.isLeExtendedAdvertisingSupported();
+         }
+
+         public boolean isLePeriodicAdvertisingSupported() {
+             AdapterService service = getService();
+             if (service == null) return false;
+             return service.isLePeriodicAdvertisingSupported();
+         }
+
          public boolean isActivityAndEnergyReportingSupported() {
              AdapterService service = getService();
              if (service == null) return false;
@@ -1877,6 +1901,26 @@ public class AdapterService extends Service {
     private boolean isActivityAndEnergyReportingSupported() {
         enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, "Need BLUETOOTH permission");
         return mAdapterProperties.isActivityAndEnergyReportingSupported();
+    }
+
+    public boolean isLe2MPhySupported() {
+        enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
+        return mAdapterProperties.isLe2MPhySupported();
+    }
+
+    public boolean isLeCodedPhySupported() {
+        enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
+        return mAdapterProperties.isLeCodedPhySupported();
+    }
+
+    public boolean isLeExtendedAdvertisingSupported() {
+        enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
+        return mAdapterProperties.isLeExtendedAdvertisingSupported();
+    }
+
+    public boolean isLePeriodicAdvertisingSupported() {
+        enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
+        return mAdapterProperties.isLePeriodicAdvertisingSupported();
     }
 
     private BluetoothActivityEnergyInfo reportActivityInfo() {
