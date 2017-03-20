@@ -638,10 +638,6 @@ public class AdapterService extends Service {
         if (mCallbacks !=null) {
             mCallbacks.kill();
         }
-
-        if (!isMock()) {
-            System.exit(0);
-        }
     }
 
     private static final int MESSAGE_PROFILE_SERVICE_STATE_CHANGED =1;
@@ -1356,6 +1352,12 @@ public class AdapterService extends Service {
              return service.isLePeriodicAdvertisingSupported();
          }
 
+         public int getLeMaximumAdvertisingDataLength() {
+             AdapterService service = getService();
+             if (service == null) return 0;
+             return service.getLeMaximumAdvertisingDataLength();
+         }
+
          public boolean isActivityAndEnergyReportingSupported() {
              AdapterService service = getService();
              if (service == null) return false;
@@ -1923,6 +1925,11 @@ public class AdapterService extends Service {
         return mAdapterProperties.isLePeriodicAdvertisingSupported();
     }
 
+    public int getLeMaximumAdvertisingDataLength() {
+        enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
+        return mAdapterProperties.getLeMaximumAdvertisingDataLength();
+    }
+
     private BluetoothActivityEnergyInfo reportActivityInfo() {
         enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, "Need BLUETOOTH permission");
         if (mAdapterProperties.getState() != BluetoothAdapter.STATE_ON ||
@@ -2294,15 +2301,5 @@ public class AdapterService extends Service {
                 debugLog("finalize() - REFCOUNT: FINALIZED. INSTANCE_COUNT= " + sRefCount);
             }
         }
-    }
-
-    // Returns if this is a mock object. This is currently used in testing so that we may not call
-    // System.exit() while finalizing the object. Otherwise GC of mock objects unfortunately ends up
-    // calling finalize() which in turn calls System.exit() and the process crashes.
-    //
-    // Mock this in your testing framework to return true to avoid the mentioned behavior. In
-    // production this has no effect.
-    public boolean isMock() {
-        return false;
     }
 }
