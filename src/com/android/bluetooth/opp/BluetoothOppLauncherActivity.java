@@ -89,6 +89,12 @@ public class BluetoothOppLauncherActivity extends Activity {
             }
 
             /*
+             * SECURITY_EXCEPTION Google Photo grant-uri-permission
+             */
+            BTOppUtils.grantPermissionToUri(getApplicationContext(),
+                    intent.getClipData());
+
+            /*
              * Other application is trying to share a file via Bluetooth,
              * probably Pictures, videos, or vCards. The Intent should contain
              * an EXTRA_STREAM with the data to attach.

@@ -232,6 +232,10 @@ public class Constants {
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         "application/x-hwp",
+        "application/ogg",
+        "application/vnd.android.package-archive",
+        "text/comma-separated-values",
+        "text/calendar",
     };
 
     /**
@@ -253,7 +257,7 @@ public class Constants {
     /**
      * Verbose level logging
      */
-    public static final boolean VERBOSE = false;
+    public static final boolean VERBOSE = Log.isLoggable(TAG, Log.VERBOSE);
 
     /** use TCP socket instead of Rfcomm Socket to develop */
     public static final boolean USE_TCP_DEBUG = false;

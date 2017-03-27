@@ -99,7 +99,7 @@ public class BluetoothOppService extends ProfileService implements IObexConnecti
         @Override
         public void onChange(boolean selfChange) {
             if (V) Log.v(TAG, "ContentObserver received notification");
-            updateFromProvider();
+            BTOppUtils.updateProviderFromhandler(mHandler);
         }
     }
 
@@ -178,6 +178,7 @@ public class BluetoothOppService extends ProfileService implements IObexConnecti
         }.start();
 
         IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
+        BTOppUtils.checkScreenState(this, mPowerManager, filter);
         registerReceiver(mBluetoothReceiver, filter);
 
         synchronized (BluetoothOppService.this) {
@@ -186,13 +187,13 @@ public class BluetoothOppService extends ProfileService implements IObexConnecti
             }
         }
         if (V) BluetoothOppPreference.getInstance(this).dump();
-        updateFromProvider();
+        BTOppUtils.updateProviderFromhandler(mHandler);
     }
 
     @Override
     public boolean start() {
         if (V) Log.v(TAG, "start()");
-        updateFromProvider();
+        BTOppUtils.updateProviderFromhandler(mHandler);
         return true;
     }
 
@@ -228,6 +229,9 @@ public class BluetoothOppService extends ProfileService implements IObexConnecti
         @Override
         public void handleMessage(Message msg) {
             switch (msg.what) {
+                case BTOppUtils.UPDATE_PROVIDER:
+                    updateFromProvider();
+                    break;
                 case STOP_LISTENER:
                     if (mAdapter != null && mOppSdpHandle >= 0
                             && SdpManager.getDefaultManager() != null) {
@@ -401,7 +405,7 @@ public class BluetoothOppService extends ProfileService implements IObexConnecti
         @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
-
+            if (D) Log.v(TAG, "action : " + action);
             if (action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
                 switch (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
                     case BluetoothAdapter.STATE_ON:
@@ -434,6 +438,8 @@ public class BluetoothOppService extends ProfileService implements IObexConnecti
                         mHandler.sendMessage(mHandler.obtainMessage(STOP_LISTENER));
                         break;
                 }
+            } else {
+                BTOppUtils.checkAction(intent);
             }
         }
     };
@@ -474,13 +480,15 @@ public class BluetoothOppService extends ProfileService implements IObexConnecti
                         throw new IllegalStateException(
                                 "multiple UpdateThreads in BluetoothOppService");
                     }
-                    if (V) Log.v(TAG, "pendingUpdate is " + mPendingUpdate + " keepUpdateThread is "
-                                + keepService + " sListenStarted is " + mListenStarted +
-                                " isInterrupted :" + isInterrupted );
+                    if (V) Log.v(TAG, "pendingUpdate is " + mPendingUpdate + " keepUpdateThread :"
+                                + keepService + " sListenStarted is " + mListenStarted
+                                + " isInterrupted :" + isInterrupted + " isScreenOff:"
+                                + BTOppUtils.isScreenOff);
                     if (!mPendingUpdate) {
                         mUpdateThread = null;
                         return;
                     }
+                    BTOppUtils.isScreenTurnedOff(isInterrupted);
                     mPendingUpdate = false;
                 }
                 Cursor cursor = getContentResolver().query(BluetoothShare.CONTENT_URI, null, null,
@@ -1016,6 +1024,7 @@ public class BluetoothOppService extends ProfileService implements IObexConnecti
             }
         }
         cursor.close();
+        BTOppUtils.cleanOnPowerOff(contentResolver);
     }
 
     private static class MediaScannerNotifier implements MediaScannerConnectionClient {
