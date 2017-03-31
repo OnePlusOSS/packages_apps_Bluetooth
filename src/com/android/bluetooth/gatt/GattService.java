@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 The Android Open Source Project
+ * Copyright (C) 2017 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,13 +26,14 @@ import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothProfile;
 import android.bluetooth.IBluetoothGatt;
-import android.bluetooth.IBluetoothGattCallback;
-import android.bluetooth.IBluetoothGattServerCallback;
-import android.bluetooth.le.AdvertiseCallback;
+import android.bluetooth.IBluetoothGattCallbackExt;
+import android.bluetooth.IBluetoothGattServerCallbackExt;
 import android.bluetooth.le.AdvertiseData;
-import android.bluetooth.le.AdvertiseSettings;
-import android.bluetooth.le.IAdvertiserCallback;
+import android.bluetooth.le.AdvertisingSetParameters;
+import android.bluetooth.le.IAdvertisingSetCallback;
+import android.bluetooth.le.IPeriodicAdvertisingCallback;
 import android.bluetooth.le.IScannerCallback;
+import android.bluetooth.le.PeriodicAdvertisingParameters;
 import android.bluetooth.le.ResultStorageDescriptor;
 import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanRecord;
@@ -41,6 +42,7 @@ import android.bluetooth.le.ScanSettings;
 import android.content.Intent;
 import android.os.Binder;
 import android.os.IBinder;
+import android.os.IInterface;
 import android.os.ParcelUuid;
 import android.os.RemoteException;
 import android.os.SystemClock;
@@ -90,6 +92,8 @@ public class GattService extends ProfileService {
     private static final int ADVT_STATE_ONFOUND = 0;
     private static final int ADVT_STATE_ONLOST = 1;
 
+    private static final int ET_LEGACY_MASK = 0x10;
+
     private static final UUID[] HID_UUIDS = {
         UUID.fromString("00002A4A-0000-1000-8000-00805F9B34FB"),
         UUID.fromString("00002A4B-0000-1000-8000-00805F9B34FB"),
@@ -102,13 +106,7 @@ public class GattService extends ProfileService {
     };
 
     /**
-     * List of our registered advertisers.
-     */
-    class AdvertiserMap extends ContextMap<IAdvertiserCallback> {}
-    AdvertiserMap mAdvertiserMap = new AdvertiserMap();
-
-    /**
-     * List of our registered advertisers.
+     * List of our registered scanners.
      */
     class ScannerMap extends ContextMap<IScannerCallback> {}
     ScannerMap mScannerMap = new ScannerMap();
@@ -116,13 +114,13 @@ public class GattService extends ProfileService {
     /**
      * List of our registered clients.
      */
-    class ClientMap extends ContextMap<IBluetoothGattCallback> {}
+    class ClientMap extends ContextMap<IBluetoothGattCallbackExt> {}
     ClientMap mClientMap = new ClientMap();
 
     /**
      * List of our registered server apps.
      */
-    class ServerMap extends ContextMap<IBluetoothGattServerCallback> {}
+    class ServerMap extends ContextMap<IBluetoothGattServerCallbackExt> {}
     ServerMap mServerMap = new ServerMap();
 
     /**
@@ -179,7 +177,6 @@ public class GattService extends ProfileService {
 
     protected boolean stop() {
         if (DBG) Log.d(TAG, "stop()");
-        mAdvertiserMap.clear();
         mScannerMap.clear();
         mClientMap.clear();
         mServerMap.clear();
@@ -275,23 +272,6 @@ public class GattService extends ProfileService {
         }
     }
 
-    class AdvertiserDeathRecipient implements IBinder.DeathRecipient {
-        int mAppIf;
-
-        public AdvertiserDeathRecipient(int appIf) {
-            mAppIf = appIf;
-        }
-
-        @Override
-        public void binderDied() {
-            if (DBG) Log.d(TAG, "Binder is dead - unregistering advertiser (" + mAppIf + ")!");
-
-            AdvertiseClient client = new AdvertiseClient(mAppIf);
-            client.appDied = true;
-            stopMultiAdvertising(client);
-        }
-    }
-
     class ServerDeathRecipient implements IBinder.DeathRecipient {
         int mAppIf;
 
@@ -345,7 +325,7 @@ public class GattService extends ProfileService {
             return service.getDevicesMatchingConnectionStates(states);
         }
 
-        public void registerClient(ParcelUuid uuid, IBluetoothGattCallback callback) {
+        public void registerClient(ParcelUuid uuid, IBluetoothGattCallbackExt callback) {
             GattService service = getService();
             if (service == null) return;
             service.registerClient(uuid.getUuid(), callback);
@@ -392,16 +372,30 @@ public class GattService extends ProfileService {
             service.flushPendingBatchResults(scannerId);
         }
 
-        public void clientConnect(int clientIf, String address, boolean isDirect, int transport) {
+        public void clientConnect(
+                int clientIf, String address, boolean isDirect, int transport, int phy) {
             GattService service = getService();
             if (service == null) return;
-            service.clientConnect(clientIf, address, isDirect, transport);
+            service.clientConnect(clientIf, address, isDirect, transport, phy);
         }
 
         public void clientDisconnect(int clientIf, String address) {
             GattService service = getService();
             if (service == null) return;
             service.clientDisconnect(clientIf, address);
+        }
+
+        public void clientSetPreferredPhy(
+                int clientIf, String address, int txPhy, int rxPhy, int phyOptions) {
+            GattService service = getService();
+            if (service == null) return;
+            // TODO(jpawlowski): implement
+        }
+
+        public void clientReadPhy(int clientIf, String address) {
+            GattService service = getService();
+            if (service == null) return;
+            // TODO(jpawlowski): implement
         }
 
         public void refreshDevice(int clientIf, String address) {
@@ -479,7 +473,7 @@ public class GattService extends ProfileService {
             service.connectionParameterUpdate(clientIf, address, connectionPriority);
         }
 
-        public void registerServer(ParcelUuid uuid, IBluetoothGattServerCallback callback) {
+        public void registerServer(ParcelUuid uuid, IBluetoothGattServerCallbackExt callback) {
             GattService service = getService();
             if (service == null) return;
             service.registerServer(uuid.getUuid(), callback);
@@ -501,6 +495,19 @@ public class GattService extends ProfileService {
             GattService service = getService();
             if (service == null) return;
             service.serverDisconnect(serverIf, address);
+        }
+
+        public void serverSetPreferredPhy(
+                int serverIf, String address, int txPhy, int rxPhy, int phyOptions) {
+            GattService service = getService();
+            if (service == null) return;
+            // TODO(jpawlowski): implement
+        }
+
+        public void serverReadPhy(int clientIf, String address) {
+            GattService service = getService();
+            if (service == null) return;
+            // TODO(jpawlowski): implement
         }
 
         public void addService(int serverIf, BluetoothGattService svc) {
@@ -536,31 +543,79 @@ public class GattService extends ProfileService {
             service.sendNotification(serverIf, address, handle, confirm, value);
         }
 
-        public void registerAdvertiser(IAdvertiserCallback callback) {
+        public void startAdvertisingSet(AdvertisingSetParameters parameters,
+                AdvertiseData advertiseData, AdvertiseData scanResponse,
+                PeriodicAdvertisingParameters periodicParameters, AdvertiseData periodicData,
+                int timeout, IAdvertisingSetCallback callback) {
             GattService service = getService();
             if (service == null) return;
-            service.registerAdvertiser(callback);
+            service.startAdvertisingSet(parameters, advertiseData, scanResponse, periodicParameters,
+                    periodicData, timeout, callback);
         }
 
-        public void unregisterAdvertiser(int advertiserId) {
+        public void stopAdvertisingSet(IAdvertisingSetCallback callback) {
             GattService service = getService();
             if (service == null) return;
-            service.unregisterAdvertiser(advertiserId);
+            service.stopAdvertisingSet(callback);
+        }
+
+        public void enableAdverisingSet(int advertiserId, boolean enable, int timeout) {
+            GattService service = getService();
+            if (service == null) return;
+            // TODO: implement
+        }
+
+        public void setAdvertisingData(int advertiserId, AdvertiseData data) {
+            GattService service = getService();
+            if (service == null) return;
+            // TODO: implement
+        }
+
+        public void setScanResponseData(int advertiserId, AdvertiseData data) {
+            GattService service = getService();
+            if (service == null) return;
+            // TODO: implement
+        }
+
+        public void setAdvertisingParameters(
+                int advertiserId, AdvertisingSetParameters parameters) {
+            GattService service = getService();
+            if (service == null) return;
+            // TODO: implement
+        }
+
+        public void setPeriodicAdvertisingParameters(
+                int advertiserId, PeriodicAdvertisingParameters parameters) {
+            GattService service = getService();
+            if (service == null) return;
+            // TODO: implement
+        }
+
+        public void setPeriodicAdvertisingData(int advertiserId, AdvertiseData data) {
+            GattService service = getService();
+            if (service == null) return;
+            // TODO: implement
+        }
+
+        public void periodicAdvertisingEnable(int advertiserId, boolean enable) {
+            GattService service = getService();
+            if (service == null) return;
+            // TODO: implement
         }
 
         @Override
-        public void startMultiAdvertising(int advertiserId, AdvertiseData advertiseData,
-                AdvertiseData scanResponse, AdvertiseSettings settings) {
+        public void registerSync(ScanResult scanResult, int skip, int timeout,
+                IPeriodicAdvertisingCallback callback) {
             GattService service = getService();
             if (service == null) return;
-            service.startMultiAdvertising(advertiserId, advertiseData, scanResponse, settings);
+            service.registerSync(scanResult, skip, timeout, callback);
         }
 
         @Override
-        public void stopMultiAdvertising(int advertiserId) {
+        public void unregisterSync(IPeriodicAdvertisingCallback callback) {
             GattService service = getService();
             if (service == null) return;
-            service.stopMultiAdvertising(new AdvertiseClient(advertiserId));
+            service.unregisterSync(callback);
         }
 
         @Override
@@ -602,6 +657,8 @@ public class GattService extends ProfileService {
         List<UUID> remoteUuids = parseUuids(adv_data);
         addScanResult();
 
+        byte[] legacy_adv_data = Arrays.copyOfRange(adv_data, 0, 62);
+
         for (ScanClient client : mScanManager.getRegularScanQueue()) {
             if (client.uuids.length > 0) {
                 int matches = 0;
@@ -618,27 +675,47 @@ public class GattService extends ProfileService {
             }
 
             ScannerMap.App app = mScannerMap.getById(client.scannerId);
-            if (app != null) {
-                BluetoothDevice device = BluetoothAdapter.getDefaultAdapter()
-                        .getRemoteDevice(address);
-                ScanResult result = new ScanResult(device, ScanRecord.parseFromBytes(adv_data),
-                        rssi, SystemClock.elapsedRealtimeNanos());
-                // Do no report if location mode is OFF or the client has no location permission
-                // PEERS_MAC_ADDRESS permission holders always get results
-                if (hasScanResultPermission(client) && matchesFilters(client, result)) {
-                    try {
-                        ScanSettings settings = client.settings;
-                        if ((settings.getCallbackType() &
-                                ScanSettings.CALLBACK_TYPE_ALL_MATCHES) != 0) {
-                            app.appScanStats.addResult();
-                            app.callback.onScanResult(result);
-                        }
-                    } catch (RemoteException e) {
-                        Log.e(TAG, "Exception: " + e);
-                        mScannerMap.remove(client.scannerId);
-                        mScanManager.stopScan(client);
-                    }
-                }
+            if (app == null) {
+                continue;
+            }
+
+            BluetoothDevice device = BluetoothAdapter.getDefaultAdapter().getRemoteDevice(address);
+
+            ScanSettings settings = client.settings;
+            byte[] scan_record_data;
+            // This is for compability with applications that assume fixed size scan data.
+            if (settings.getLegacy() && ((event_type & ET_LEGACY_MASK) == 0)) {
+                scan_record_data = legacy_adv_data;
+            } else {
+                scan_record_data = adv_data;
+            }
+
+            ScanResult result = new ScanResult(device, event_type, primary_phy, secondary_phy,
+                    advertising_sid, tx_power, rssi, periodic_adv_int,
+                    ScanRecord.parseFromBytes(scan_record_data),
+                    SystemClock.elapsedRealtimeNanos());
+            // Do no report if location mode is OFF or the client has no location permission
+            // PEERS_MAC_ADDRESS permission holders always get results
+            if (!hasScanResultPermission(client) || !matchesFilters(client, result)) {
+                continue;
+            }
+
+            if ((settings.getCallbackType() & ScanSettings.CALLBACK_TYPE_ALL_MATCHES) == 0) {
+                continue;
+            }
+
+            // if this is legacy scan, return only legacy scan results
+            if (settings.getLegacy() && ((event_type & ET_LEGACY_MASK) == 0)) {
+                continue;
+            }
+
+            try {
+                app.appScanStats.addResult();
+                app.callback.onScanResult(result);
+            } catch (RemoteException e) {
+                Log.e(TAG, "Exception: " + e);
+                mScannerMap.remove(client.scannerId);
+                mScanManager.stopScan(client);
             }
         }
     }
@@ -1146,19 +1223,6 @@ public class GattService extends ProfileService {
         Log.d(TAG, "onScanParamSetupCompleted : " + status);
     }
 
-    // callback from AdvertiseManager for advertise status dispatch.
-    void onMultipleAdvertiseCallback(int advertiserId, int status, boolean isStart,
-            AdvertiseSettings settings) throws RemoteException {
-        AdvertiserMap.App app = mAdvertiserMap.getById(advertiserId);
-        if (app == null || app.callback == null) {
-            Log.e(TAG, "Advertise app or callback is null");
-            return;
-        }
-        if (DBG) Log.d(TAG, "onMultipleAdvertiseCallback : advertiserId: " + advertiserId
-            + " isStart: " + isStart + " status: " + status);
-        app.callback.onMultiAdvertiseCallback(status, isStart, settings);
-    }
-
     // callback from ScanManager for dispatch of errors apps.
     void onScanManagerErrorCallback(int scannerId, int errorCode) throws RemoteException {
         ScannerMap.App app = mScannerMap.getById(scannerId);
@@ -1178,68 +1242,6 @@ public class GattService extends ProfileService {
         ClientMap.App app = mClientMap.getByConnId(connId);
         if (app != null) {
             app.callback.onConfigureMTU(address, mtu, status);
-        }
-    }
-
-    // Followings are callbacks for Bluetooth LE Advertise operations.
-    // Start advertising flow is
-    //     register advertiser         -> onAdvertiserRegistered
-    //     enable advertising instance -> onAdvertiseInstaceEnabled
-    // ->  set advertise data          -> onAdvertiseDataSet
-    // ->  set scan response           -> onAdvertiseDataSet
-
-    void onAdvertiserRegistered(int status, int advertiserId, long uuidLsb, long uuidMsb)
-            throws RemoteException {
-        UUID uuid = new UUID(uuidMsb, uuidLsb);
-        if (DBG) Log.d(TAG, "onAdvertiserRegistered() - UUID=" + uuid
-                + ", advertiserId=" + advertiserId + ", status=" + status);
-
-        AdvertiserMap.App app = mAdvertiserMap.getByUuid(uuid);
-        if (app != null) {
-            if (status == 0) {
-                app.id = advertiserId;
-                app.linkToDeath(new AdvertiserDeathRecipient(advertiserId));
-            } else {
-                mAdvertiserMap.remove(advertiserId);
-            }
-            app.callback.onAdvertiserRegistered(status, advertiserId);
-        }
-    }
-
-    void onAdvertiserStarted(int status, int advertiserId)
-            throws RemoteException {
-        if (DBG) Log.d(TAG, "onAdvertiserStarted() - advertiserId=" + advertiserId +
-            ", status=" + status);
-
-        AdvertiserMap.App app = mAdvertiserMap.getById(advertiserId);
-        if (app != null) {
-            if (status == 0) {
-                AdvertiseClient client = mAdvertiseManager.getAdvertiseClient(advertiserId);
-                AdvertiseSettings settings = (client == null) ? null : client.settings;
-                app.callback.onMultiAdvertiseCallback(AdvertiseCallback.ADVERTISE_SUCCESS,
-                        true, settings);
-            } else {
-                app.callback.onMultiAdvertiseCallback(
-                        AdvertiseCallback.ADVERTISE_FAILED_INTERNAL_ERROR, true, null);
-            }
-        }
-    }
-
-    // Callback when advertise instance is enabled.
-    void onAdvertiseInstanceEnabled(int status, int advertiserId,
-                                    boolean enable) throws RemoteException {
-        if (DBG) Log.d(TAG, "onAdvertiseInstanceEnabled() - "
-                + "advertiserId=" + advertiserId + ", status=" + status + ", enable=" + enable);
-
-        AdvertiserMap.App app = mAdvertiserMap.getById(advertiserId);
-        if (app != null) {
-            if (status == 0) {
-                app.callback.onMultiAdvertiseCallback(AdvertiseCallback.ADVERTISE_SUCCESS,
-                        enable, null);
-            } else {
-                app.callback.onMultiAdvertiseCallback(
-                        AdvertiseCallback.ADVERTISE_FAILED_INTERNAL_ERROR, enable, null);
-            }
         }
     }
 
@@ -1401,47 +1403,42 @@ public class GattService extends ProfileService {
     }
 
     /**************************************************************************
-     * ADVERTISER
+     * PERIODIC SCANNING
      *************************************************************************/
-
-    void registerAdvertiser(IAdvertiserCallback callback) {
-        enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
-
-        UUID uuid = UUID.randomUUID();
-        if (DBG) Log.d(TAG, "registerAdvertiser() - UUID=" + uuid);
-        mAdvertiserMap.add(uuid, callback, this);
-        mAdvertiseManager.registerAdvertiser(uuid);
+    void registerSync(
+            ScanResult scanResult, int skip, int timeout, IPeriodicAdvertisingCallback callback) {
+        enforceAdminPermission();
+        // TODO(jpawlowski): implement
     }
 
-    void unregisterAdvertiser(int advertiserId) {
-        enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
-
-        if (DBG) Log.d(TAG, "unregisterAdvertiser() - advertiserId=" + advertiserId);
-        mAdvertiserMap.remove(advertiserId);
-        mAdvertiseManager.unregisterAdvertiser(advertiserId);
+    void unregisterSync(IPeriodicAdvertisingCallback callback) {
+        enforceAdminPermission();
+        // TODO(jpawlowski): implement
     }
 
-    void startMultiAdvertising(int advertiserId, AdvertiseData advertiseData,
-            AdvertiseData scanResponse, AdvertiseSettings settings) {
+    /**************************************************************************
+     * ADVERTISING SET
+     *************************************************************************/
+    void startAdvertisingSet(AdvertisingSetParameters parameters, AdvertiseData advertiseData,
+            AdvertiseData scanResponse, PeriodicAdvertisingParameters periodicParameters,
+            AdvertiseData periodicData, int timeout, IAdvertisingSetCallback callback) {
         enforceAdminPermission();
 
-        if (DBG) Log.d(TAG, "startMultiAdvertising() - advertiserId=" + advertiserId);
-        mAdvertiseManager.startAdvertising(new AdvertiseClient(advertiserId, settings, advertiseData,
-                scanResponse));
+        mAdvertiseManager.startAdvertisingSet(parameters, advertiseData, scanResponse,
+                periodicParameters, periodicData, timeout, callback);
     }
 
-    void stopMultiAdvertising(AdvertiseClient client) {
+    void stopAdvertisingSet(IAdvertisingSetCallback callback) {
         enforceAdminPermission();
 
-        if (DBG) Log.d(TAG, "stopMultiAdvertising() - advertiserId=" + client.advertiserId);
-        mAdvertiseManager.stopAdvertising(client);
+        mAdvertiseManager.stopAdvertisingSet(callback);
     }
 
     /**************************************************************************
      * GATT Service functions - CLIENT
      *************************************************************************/
 
-    void registerClient(UUID uuid, IBluetoothGattCallback callback) {
+    void registerClient(UUID uuid, IBluetoothGattCallbackExt callback) {
         enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
 
         if (DBG) Log.d(TAG, "registerClient() - UUID=" + uuid);
@@ -1458,10 +1455,11 @@ public class GattService extends ProfileService {
         gattClientUnregisterAppNative(clientIf);
     }
 
-    void clientConnect(int clientIf, String address, boolean isDirect, int transport) {
+    void clientConnect(int clientIf, String address, boolean isDirect, int transport, int phy) {
         enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
 
         if (DBG) Log.d(TAG, "clientConnect() - address=" + address + ", isDirect=" + isDirect);
+        // TODO(jpawlowski): propagate PHY!
         gattClientConnectNative(clientIf, address, isDirect, transport);
     }
 
@@ -1931,7 +1929,7 @@ public class GattService extends ProfileService {
      * GATT Service functions - SERVER
      *************************************************************************/
 
-    void registerServer(UUID uuid, IBluetoothGattServerCallback callback) {
+    void registerServer(UUID uuid, IBluetoothGattServerCallbackExt callback) {
         enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
 
         if (DBG) Log.d(TAG, "registerServer() - UUID=" + uuid);
@@ -2159,7 +2157,7 @@ public class GattService extends ProfileService {
 
         int offset = 0;
         while(offset < (adv_data.length-2)) {
-            int len = adv_data[offset++];
+            int len = Byte.toUnsignedInt(adv_data[offset++]);
             if (len == 0) break;
 
             int type = adv_data[offset++];
