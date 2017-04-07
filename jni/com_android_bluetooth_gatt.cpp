@@ -118,6 +118,14 @@ static jstring bdaddr2newjstr(JNIEnv* env, bt_bdaddr_t* bda) {
   return env->NewStringUTF(c_address);
 }
 
+static std::vector<uint8_t> toVector(JNIEnv* env, jbyteArray ba) {
+  jbyte* data_data = env->GetByteArrayElements(ba, NULL);
+  uint16_t data_len = (uint16_t)env->GetArrayLength(ba);
+  std::vector<uint8_t> data_vec(data_data, data_data + data_len);
+  env->ReleaseByteArrayElements(ba, data_data, JNI_ABORT);
+  return data_vec;
+}
+
 namespace android {
 
 /**
@@ -153,6 +161,9 @@ static jmethodID method_onTrackAdvFoundLost;
 static jmethodID method_onScanParamSetupCompleted;
 static jmethodID method_getSampleGattDbElement;
 static jmethodID method_onGetGattDb;
+static jmethodID method_onClientPhyUpdate;
+static jmethodID method_onClientPhyRead;
+static jmethodID method_onClientConnUpdate;
 
 /**
  * Server callback methods
@@ -171,12 +182,28 @@ static jmethodID method_onExecuteWrite;
 static jmethodID method_onNotificationSent;
 static jmethodID method_onServerCongestion;
 static jmethodID method_onServerMtuChanged;
+static jmethodID method_onServerPhyUpdate;
+static jmethodID method_onServerPhyRead;
+static jmethodID method_onServerConnUpdate;
 
 /**
  * Advertiser callback methods
  */
 static jmethodID method_onAdvertisingSetStarted;
-static jmethodID method_onAdvertisingSetEnabled;
+static jmethodID method_onAdvertisingEnabled;
+static jmethodID method_onAdvertisingDataSet;
+static jmethodID method_onScanResponseDataSet;
+static jmethodID method_onAdvertisingParametersUpdated;
+static jmethodID method_onPeriodicAdvertisingParametersUpdated;
+static jmethodID method_onPeriodicAdvertisingDataSet;
+static jmethodID method_onPeriodicAdvertisingEnabled;
+
+/**
+ * Periodic scanner callback methods
+ */
+static jmethodID method_onSyncLost;
+static jmethodID method_onSyncReport;
+static jmethodID method_onSyncStarted;
 
 /**
  * Static variables
@@ -185,6 +212,7 @@ static jmethodID method_onAdvertisingSetEnabled;
 static const btgatt_interface_t* sGattIf = NULL;
 static jobject mCallbacksObj = NULL;
 static jobject mAdvertiseCallbacksObj = NULL;
+static jobject mPeriodicScanCallbacksObj = NULL;
 
 /**
  * BTA client callbacks
@@ -500,6 +528,24 @@ void btgattc_get_gatt_db_cb(int conn_id, btgatt_db_element_t* db, int count) {
                                array.get());
 }
 
+void btgattc_phy_updated_cb(int conn_id, uint8_t tx_phy, uint8_t rx_phy,
+                            uint8_t status) {
+  CallbackEnv sCallbackEnv(__func__);
+  if (!sCallbackEnv.valid()) return;
+
+  sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onClientPhyUpdate, conn_id,
+                               tx_phy, rx_phy, status);
+}
+
+void btgattc_conn_updated_cb(int conn_id, uint16_t interval, uint16_t latency,
+                             uint16_t timeout, uint8_t status) {
+  CallbackEnv sCallbackEnv(__func__);
+  if (!sCallbackEnv.valid()) return;
+
+  sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onClientConnUpdate,
+                               conn_id, interval, latency, timeout, status);
+}
+
 static const btgatt_scanner_callbacks_t sGattScannerCallbacks = {
     btgattc_scan_result_cb,
     btgattc_batchscan_reports_cb,
@@ -524,8 +570,9 @@ static const btgatt_client_callbacks_t sGattClientCallbacks = {
     btgattc_congestion_cb,
     btgattc_get_gatt_db_cb,
     NULL, /* services_removed_cb */
-    NULL  /* services_added_cb */
-};
+    NULL, /* services_added_cb */
+    btgattc_phy_updated_cb,
+    btgattc_conn_updated_cb};
 
 /**
  * BTA server callbacks
@@ -689,6 +736,24 @@ void btgatts_mtu_changed_cb(int conn_id, int mtu) {
                                conn_id, mtu);
 }
 
+void btgatts_phy_updated_cb(int conn_id, uint8_t tx_phy, uint8_t rx_phy,
+                            uint8_t status) {
+  CallbackEnv sCallbackEnv(__func__);
+  if (!sCallbackEnv.valid()) return;
+
+  sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onServerPhyUpdate, conn_id,
+                               tx_phy, rx_phy, status);
+}
+
+void btgatts_conn_updated_cb(int conn_id, uint16_t interval, uint16_t latency,
+                             uint16_t timeout, uint8_t status) {
+  CallbackEnv sCallbackEnv(__func__);
+  if (!sCallbackEnv.valid()) return;
+
+  sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onServerConnUpdate,
+                               conn_id, interval, latency, timeout, status);
+}
+
 static const btgatt_server_callbacks_t sGattServerCallbacks = {
     btgatts_register_app_cb,
     btgatts_connection_cb,
@@ -703,7 +768,9 @@ static const btgatt_server_callbacks_t sGattServerCallbacks = {
     btgatts_response_confirmation_cb,
     btgatts_indication_sent_cb,
     btgatts_congestion_cb,
-    btgatts_mtu_changed_cb};
+    btgatts_mtu_changed_cb,
+    btgatts_phy_updated_cb,
+    btgatts_conn_updated_cb};
 
 /**
  * GATT callbacks
@@ -779,6 +846,12 @@ static void classInitNative(JNIEnv* env, jclass clazz) {
                        "()Lcom/android/bluetooth/gatt/GattDbElement;");
   method_onGetGattDb =
       env->GetMethodID(clazz, "onGetGattDb", "(ILjava/util/ArrayList;)V");
+  method_onClientPhyRead =
+      env->GetMethodID(clazz, "onClientPhyRead", "(IIII)V");
+  method_onClientPhyUpdate =
+      env->GetMethodID(clazz, "onClientPhyUpdate", "(IIII)V");
+  method_onClientConnUpdate =
+      env->GetMethodID(clazz, "onClientConnUpdate", "(IIIII)V");
 
   // Server callbacks
 
@@ -809,6 +882,12 @@ static void classInitNative(JNIEnv* env, jclass clazz) {
   method_onServerCongestion =
       env->GetMethodID(clazz, "onServerCongestion", "(IZ)V");
   method_onServerMtuChanged = env->GetMethodID(clazz, "onMtuChanged", "(II)V");
+  method_onServerPhyRead =
+      env->GetMethodID(clazz, "onServerPhyRead", "(IIII)V");
+  method_onServerPhyUpdate =
+      env->GetMethodID(clazz, "onServerPhyUpdate", "(IIII)V");
+  method_onServerConnUpdate =
+      env->GetMethodID(clazz, "onServerConnUpdate", "(IIIII)V");
 
   info("classInitNative: Success!");
 }
@@ -928,12 +1007,13 @@ static void gattClientScanNative(JNIEnv* env, jobject object, jboolean start) {
 
 static void gattClientConnectNative(JNIEnv* env, jobject object, jint clientif,
                                     jstring address, jboolean isDirect,
-                                    jint transport) {
+                                    jint transport, jint initiating_phys) {
   if (!sGattIf) return;
 
   bt_bdaddr_t bda;
   jstr2bdaddr(env, &bda, address);
-  sGattIf->client->connect(clientif, &bda, isDirect, transport);
+  sGattIf->client->connect(clientif, &bda, isDirect, transport,
+                           initiating_phys);
 }
 
 static void gattClientDisconnectNative(JNIEnv* env, jobject object,
@@ -943,6 +1023,29 @@ static void gattClientDisconnectNative(JNIEnv* env, jobject object,
   bt_bdaddr_t bda;
   jstr2bdaddr(env, &bda, address);
   sGattIf->client->disconnect(clientIf, &bda, conn_id);
+}
+
+static void gattClientSetPreferredPhyNative(JNIEnv* env, jobject object,
+                                            jint clientIf, jint conn_id,
+                                            jint tx_phy, jint rx_phy,
+                                            jint phy_options) {
+  if (!sGattIf) return;
+  sGattIf->client->set_preferred_phy(conn_id, tx_phy, rx_phy, phy_options);
+}
+
+static void readClientPhyCb(int conn_id, uint8_t tx_phy, uint8_t rx_phy,
+                            uint8_t status) {
+  CallbackEnv sCallbackEnv(__func__);
+  if (!sCallbackEnv.valid()) return;
+
+  sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onClientPhyRead, conn_id,
+                               tx_phy, rx_phy, status);
+}
+
+static void gattClientReadPhyNative(JNIEnv* env, jobject object, jint clientIf,
+                                    jint conn_id) {
+  if (!sGattIf) return;
+  sGattIf->client->read_phy(conn_id, base::Bind(readClientPhyCb, conn_id));
 }
 
 static void gattClientRefreshNative(JNIEnv* env, jobject object, jint clientIf,
@@ -1408,6 +1511,29 @@ static void gattServerDisconnectNative(JNIEnv* env, jobject object,
   sGattIf->server->disconnect(serverIf, &bda, conn_id);
 }
 
+static void gattServerSetPreferredPhyNative(JNIEnv* env, jobject object,
+                                            jint serverIf, jint conn_id,
+                                            jint tx_phy, jint rx_phy,
+                                            jint phy_options) {
+  if (!sGattIf) return;
+  sGattIf->server->set_preferred_phy(conn_id, tx_phy, rx_phy, phy_options);
+}
+
+static void readServerPhyCb(int conn_id, uint8_t tx_phy, uint8_t rx_phy,
+                            uint8_t status) {
+  CallbackEnv sCallbackEnv(__func__);
+  if (!sCallbackEnv.valid()) return;
+
+  sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onServerPhyRead, conn_id,
+                               tx_phy, rx_phy, status);
+}
+
+static void gattServerReadPhyNative(JNIEnv* env, jobject object, jint serverIf,
+                                    jint conn_id) {
+  if (!sGattIf) return;
+  sGattIf->server->read_phy(conn_id, base::Bind(readServerPhyCb, conn_id));
+}
+
 static void gattServerAddServiceNative(JNIEnv* env, jobject object,
                                        jint server_if,
                                        jobject gatt_db_elements) {
@@ -1545,9 +1671,21 @@ static void gattServerSendResponseNative(JNIEnv* env, jobject object,
 
 static void advertiseClassInitNative(JNIEnv* env, jclass clazz) {
   method_onAdvertisingSetStarted =
-      env->GetMethodID(clazz, "onAdvertisingSetStarted", "(III)V");
-  method_onAdvertisingSetEnabled =
-      env->GetMethodID(clazz, "onAdvertisingSetEnabled", "(IZI)V");
+      env->GetMethodID(clazz, "onAdvertisingSetStarted", "(IIII)V");
+  method_onAdvertisingEnabled =
+      env->GetMethodID(clazz, "onAdvertisingEnabled", "(IZI)V");
+  method_onAdvertisingDataSet =
+      env->GetMethodID(clazz, "onAdvertisingDataSet", "(II)V");
+  method_onScanResponseDataSet =
+      env->GetMethodID(clazz, "onScanResponseDataSet", "(II)V");
+  method_onAdvertisingParametersUpdated =
+      env->GetMethodID(clazz, "onAdvertisingParametersUpdated", "(III)V");
+  method_onPeriodicAdvertisingParametersUpdated = env->GetMethodID(
+      clazz, "onPeriodicAdvertisingParametersUpdated", "(II)V");
+  method_onPeriodicAdvertisingDataSet =
+      env->GetMethodID(clazz, "onPeriodicAdvertisingDataSet", "(II)V");
+  method_onPeriodicAdvertisingEnabled =
+      env->GetMethodID(clazz, "onPeriodicAdvertisingEnabled", "(IZI)V");
 }
 
 static void advertiseInitializeNative(JNIEnv* env, jobject object) {
@@ -1567,8 +1705,7 @@ static void advertiseCleanupNative(JNIEnv* env, jobject object) {
   }
 }
 
-static AdvertiseParameters parseParams(JNIEnv* env, jobject i,
-                                       bool isScannable) {
+static AdvertiseParameters parseParams(JNIEnv* env, jobject i) {
   AdvertiseParameters p;
 
   jclass clazz = env->GetObjectClass(i);
@@ -1576,6 +1713,8 @@ static AdvertiseParameters parseParams(JNIEnv* env, jobject i,
 
   methodId = env->GetMethodID(clazz, "isConnectable", "()Z");
   jboolean isConnectable = env->CallBooleanMethod(i, methodId);
+  methodId = env->GetMethodID(clazz, "isScannable", "()Z");
+  jboolean isScannable = env->CallBooleanMethod(i, methodId);
   methodId = env->GetMethodID(clazz, "isLegacy", "()Z");
   jboolean isLegacy = env->CallBooleanMethod(i, methodId);
   methodId = env->GetMethodID(clazz, "isAnonymous", "()Z");
@@ -1593,7 +1732,7 @@ static AdvertiseParameters parseParams(JNIEnv* env, jobject i,
 
   uint16_t props = 0;
   if (isConnectable) props |= 0x01;
-  if (isScannable || (isLegacy && isConnectable)) props |= 0x02;
+  if (isScannable) props |= 0x02;
   if (isLegacy) props |= 0x10;
   if (isAnonymous) props |= 0x20;
   if (includeTxPower) props |= 0x40;
@@ -1638,12 +1777,12 @@ static PeriodicAdvertisingParameters parsePeriodicParams(JNIEnv* env,
 }
 
 static void ble_advertising_set_started_cb(int reg_id, uint8_t advertiser_id,
-                                           uint8_t status) {
+                                           int8_t tx_power, uint8_t status) {
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid()) return;
   sCallbackEnv->CallVoidMethod(mAdvertiseCallbacksObj,
                                method_onAdvertisingSetStarted, reg_id,
-                               advertiser_id, status);
+                               advertiser_id, tx_power, status);
 }
 
 static void ble_advertising_set_timeout_cb(uint8_t advertiser_id,
@@ -1651,7 +1790,7 @@ static void ble_advertising_set_timeout_cb(uint8_t advertiser_id,
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid()) return;
   sCallbackEnv->CallVoidMethod(mAdvertiseCallbacksObj,
-                               method_onAdvertisingSetEnabled, advertiser_id,
+                               method_onAdvertisingEnabled, advertiser_id,
                                false, status);
 }
 
@@ -1659,8 +1798,8 @@ static void startAdvertisingSetNative(JNIEnv* env, jobject object,
                                       jobject parameters, jbyteArray adv_data,
                                       jbyteArray scan_resp,
                                       jobject periodic_parameters,
-                                      jbyteArray periodic_data, jint timeout,
-                                      jint reg_id) {
+                                      jbyteArray periodic_data, jint duration,
+                                      jint maxExtAdvEvents, jint reg_id) {
   if (!sGattIf) return;
 
   jbyte* scan_resp_data = env->GetByteArrayElements(scan_resp, NULL);
@@ -1669,12 +1808,9 @@ static void startAdvertisingSetNative(JNIEnv* env, jobject object,
                                      scan_resp_data + scan_resp_len);
   env->ReleaseByteArrayElements(scan_resp, scan_resp_data, JNI_ABORT);
 
-  AdvertiseParameters params =
-      parseParams(env, parameters, (scan_resp_len != 0));
+  AdvertiseParameters params = parseParams(env, parameters);
   PeriodicAdvertisingParameters periodicParams =
       parsePeriodicParams(env, periodic_parameters);
-
-  int timeout_s = (int)timeout / 1000;
 
   jbyte* adv_data_data = env->GetByteArrayElements(adv_data, NULL);
   uint16_t adv_data_len = (uint16_t)env->GetArrayLength(adv_data);
@@ -1689,8 +1825,8 @@ static void startAdvertisingSetNative(JNIEnv* env, jobject object,
 
   sGattIf->advertiser->StartAdvertisingSet(
       base::Bind(&ble_advertising_set_started_cb, reg_id), params, data_vec,
-      scan_resp_vec, periodicParams, periodic_data_vec, timeout_s,
-      base::Bind(ble_advertising_set_timeout_cb));
+      scan_resp_vec, periodicParams, periodic_data_vec, duration,
+      maxExtAdvEvents, base::Bind(ble_advertising_set_timeout_cb));
 }
 
 static void stopAdvertisingSetNative(JNIEnv* env, jobject object,
@@ -1698,6 +1834,192 @@ static void stopAdvertisingSetNative(JNIEnv* env, jobject object,
   if (!sGattIf) return;
 
   sGattIf->advertiser->Unregister(advertiser_id);
+}
+
+static void callJniCallback(jmethodID method, uint8_t advertiser_id,
+                            uint8_t status) {
+  CallbackEnv sCallbackEnv(__func__);
+  if (!sCallbackEnv.valid()) return;
+  sCallbackEnv->CallVoidMethod(mAdvertiseCallbacksObj, method, advertiser_id,
+                               status);
+}
+
+static void enableSetCb(uint8_t advertiser_id, bool enable, uint8_t status) {
+  CallbackEnv sCallbackEnv(__func__);
+  if (!sCallbackEnv.valid()) return;
+  sCallbackEnv->CallVoidMethod(mAdvertiseCallbacksObj,
+                               method_onAdvertisingEnabled, advertiser_id,
+                               enable, status);
+}
+
+static void enableAdvertisingSetNative(JNIEnv* env, jobject object,
+                                       jint advertiser_id, jboolean enable,
+                                       jint duration, jint maxExtAdvEvents) {
+  if (!sGattIf) return;
+
+  sGattIf->advertiser->Enable(advertiser_id, enable,
+                              base::Bind(&enableSetCb, advertiser_id, enable),
+                              duration, maxExtAdvEvents,
+                              base::Bind(&enableSetCb, advertiser_id, false));
+}
+
+static void setAdvertisingDataNative(JNIEnv* env, jobject object,
+                                     jint advertiser_id, jbyteArray data) {
+  if (!sGattIf) return;
+
+  sGattIf->advertiser->SetData(
+      advertiser_id, false, toVector(env, data),
+      base::Bind(&callJniCallback, method_onAdvertisingDataSet, advertiser_id));
+}
+
+static void setScanResponseDataNative(JNIEnv* env, jobject object,
+                                      jint advertiser_id, jbyteArray data) {
+  if (!sGattIf) return;
+
+  sGattIf->advertiser->SetData(
+      advertiser_id, true, toVector(env, data),
+      base::Bind(&callJniCallback, method_onScanResponseDataSet,
+                 advertiser_id));
+}
+
+static void setAdvertisingParametersNativeCb(uint8_t advertiser_id,
+                                             uint8_t status, int8_t tx_power) {
+  CallbackEnv sCallbackEnv(__func__);
+  if (!sCallbackEnv.valid()) return;
+  sCallbackEnv->CallVoidMethod(mCallbacksObj,
+                               method_onAdvertisingParametersUpdated,
+                               advertiser_id, tx_power, status);
+}
+
+static void setAdvertisingParametersNative(JNIEnv* env, jobject object,
+                                           jint advertiser_id,
+                                           jobject parameters) {
+  if (!sGattIf) return;
+
+  AdvertiseParameters params = parseParams(env, parameters);
+  sGattIf->advertiser->SetParameters(
+      advertiser_id, params,
+      base::Bind(setAdvertisingParametersNativeCb, advertiser_id));
+}
+
+static void setPeriodicAdvertisingParametersNative(
+    JNIEnv* env, jobject object, jint advertiser_id,
+    jobject periodic_parameters) {
+  if (!sGattIf) return;
+
+  PeriodicAdvertisingParameters periodicParams =
+      parsePeriodicParams(env, periodic_parameters);
+  sGattIf->advertiser->SetPeriodicAdvertisingParameters(
+      advertiser_id, periodicParams,
+      base::Bind(&callJniCallback,
+                 method_onPeriodicAdvertisingParametersUpdated, advertiser_id));
+}
+
+static void setPeriodicAdvertisingDataNative(JNIEnv* env, jobject object,
+                                             jint advertiser_id,
+                                             jbyteArray data) {
+  if (!sGattIf) return;
+
+  sGattIf->advertiser->SetPeriodicAdvertisingData(
+      advertiser_id, toVector(env, data),
+      base::Bind(&callJniCallback, method_onPeriodicAdvertisingDataSet,
+                 advertiser_id));
+}
+
+static void enablePeriodicSetCb(uint8_t advertiser_id, bool enable,
+                                uint8_t status) {
+  CallbackEnv sCallbackEnv(__func__);
+  if (!sCallbackEnv.valid()) return;
+  sCallbackEnv->CallVoidMethod(mCallbacksObj,
+                               method_onPeriodicAdvertisingEnabled,
+                               advertiser_id, enable, status);
+}
+
+static void setPeriodicAdvertisingEnableNative(JNIEnv* env, jobject object,
+                                               jint advertiser_id,
+                                               jboolean enable) {
+  if (!sGattIf) return;
+
+  sGattIf->advertiser->SetPeriodicAdvertisingEnable(
+      advertiser_id, enable,
+      base::Bind(&enablePeriodicSetCb, advertiser_id, enable));
+}
+
+static void periodicScanClassInitNative(JNIEnv* env, jclass clazz) {
+  method_onSyncStarted =
+      env->GetMethodID(clazz, "onSyncStarted", "(IIIILjava/lang/String;III)V");
+  method_onSyncReport = env->GetMethodID(clazz, "onSyncReport", "(IIII[B)V");
+  method_onSyncLost = env->GetMethodID(clazz, "onSyncLost", "(I)V");
+}
+
+static void periodicScanInitializeNative(JNIEnv* env, jobject object) {
+  if (mPeriodicScanCallbacksObj != NULL) {
+    ALOGW("Cleaning up periodic scan callback object");
+    env->DeleteGlobalRef(mPeriodicScanCallbacksObj);
+    mPeriodicScanCallbacksObj = NULL;
+  }
+
+  mPeriodicScanCallbacksObj = env->NewGlobalRef(object);
+}
+
+static void periodicScanCleanupNative(JNIEnv* env, jobject object) {
+  if (mPeriodicScanCallbacksObj != NULL) {
+    env->DeleteGlobalRef(mPeriodicScanCallbacksObj);
+    mPeriodicScanCallbacksObj = NULL;
+  }
+}
+
+static void onSyncStarted(int reg_id, uint8_t status, uint16_t sync_handle,
+                          uint8_t sid, uint8_t address_type,
+                          bt_bdaddr_t address, uint8_t phy, uint16_t interval) {
+  CallbackEnv sCallbackEnv(__func__);
+  if (!sCallbackEnv.valid()) return;
+
+  sCallbackEnv->CallVoidMethod(mPeriodicScanCallbacksObj, method_onSyncStarted,
+                               reg_id, sync_handle, sid, address_type, address,
+                               phy, interval, status);
+}
+
+static void onSyncReport(uint16_t sync_handle, int8_t tx_power, int8_t rssi,
+                         uint8_t data_status, std::vector<uint8_t> data) {
+  CallbackEnv sCallbackEnv(__func__);
+  if (!sCallbackEnv.valid()) return;
+
+  ScopedLocalRef<jbyteArray> jb(sCallbackEnv.get(),
+                                sCallbackEnv->NewByteArray(data.size()));
+  sCallbackEnv->SetByteArrayRegion(jb.get(), 0, data.size(),
+                                   (jbyte*)data.data());
+
+  sCallbackEnv->CallVoidMethod(mPeriodicScanCallbacksObj, method_onSyncReport,
+                               sync_handle, tx_power, rssi, data_status,
+                               jb.get());
+}
+
+static void onSyncLost(uint16_t sync_handle) {
+  CallbackEnv sCallbackEnv(__func__);
+  if (!sCallbackEnv.valid()) return;
+
+  sCallbackEnv->CallVoidMethod(mPeriodicScanCallbacksObj, method_onSyncLost,
+                               sync_handle);
+}
+
+static void startSyncNative(JNIEnv* env, jobject object, jint sid,
+                            jstring address, jint skip, jint timeout,
+                            jint reg_id) {
+  if (!sGattIf) return;
+
+  bt_bdaddr_t tmp;
+  jstr2bdaddr(env, &tmp, address);
+
+  sGattIf->scanner->StartSync(
+      sid, tmp, skip, timeout, base::Bind(&onSyncStarted, reg_id),
+      base::Bind(&onSyncReport), base::Bind(&onSyncLost));
+}
+
+static void stopSyncNative(int sync_handle) {
+  if (!sGattIf) return;
+
+  sGattIf->scanner->StopSync(sync_handle);
 }
 
 static void gattTestNative(JNIEnv* env, jobject object, jint command,
@@ -1733,9 +2055,32 @@ static JNINativeMethod sAdvertiseMethods[] = {
     {"cleanupNative", "()V", (void*)advertiseCleanupNative},
     {"startAdvertisingSetNative",
      "(Landroid/bluetooth/le/AdvertisingSetParameters;[B[BLandroid/bluetooth/"
-     "le/PeriodicAdvertisingParameters;[BII)V",
+     "le/PeriodicAdvertisingParameters;[BIII)V",
      (void*)startAdvertisingSetNative},
     {"stopAdvertisingSetNative", "(I)V", (void*)stopAdvertisingSetNative},
+    {"enableAdvertisingSetNative", "(IZII)V",
+     (void*)enableAdvertisingSetNative},
+    {"setAdvertisingDataNative", "(I[B)V", (void*)setAdvertisingDataNative},
+    {"setScanResponseDataNative", "(I[B)V", (void*)setScanResponseDataNative},
+    {"setAdvertisingParametersNative",
+     "(ILandroid/bluetooth/le/AdvertisingSetParameters;)V",
+     (void*)setAdvertisingParametersNative},
+    {"setPeriodicAdvertisingParametersNative",
+     "(ILandroid/bluetooth/le/PeriodicAdvertisingParameters;)V",
+     (void*)setPeriodicAdvertisingParametersNative},
+    {"setPeriodicAdvertisingDataNative", "(I[B)V",
+     (void*)setPeriodicAdvertisingDataNative},
+    {"setPeriodicAdvertisingEnableNative", "(IZ)V",
+     (void*)setPeriodicAdvertisingEnableNative},
+};
+
+// JNI functions defined in PeriodicScanManager class.
+static JNINativeMethod sPeriodicScanMethods[] = {
+    {"classInitNative", "()V", (void*)periodicScanClassInitNative},
+    {"initializeNative", "()V", (void*)periodicScanInitializeNative},
+    {"cleanupNative", "()V", (void*)periodicScanCleanupNative},
+    {"startSyncNative", "(ILjava/lang/String;III)V", (void*)startSyncNative},
+    {"stopSyncNative", "(I)V", (void*)stopSyncNative},
 };
 
 // JNI functions defined in ScanManager class.
@@ -1785,10 +2130,13 @@ static JNINativeMethod sMethods[] = {
      (void*)gattClientRegisterAppNative},
     {"gattClientUnregisterAppNative", "(I)V",
      (void*)gattClientUnregisterAppNative},
-    {"gattClientConnectNative", "(ILjava/lang/String;ZI)V",
+    {"gattClientConnectNative", "(ILjava/lang/String;ZII)V",
      (void*)gattClientConnectNative},
     {"gattClientDisconnectNative", "(ILjava/lang/String;I)V",
      (void*)gattClientDisconnectNative},
+    {"gattClientSetPreferredPhyNative", "(IIIII)V",
+     (void*)gattClientSetPreferredPhyNative},
+    {"gattClientReadPhyNative", "(II)V", (void*)gattClientReadPhyNative},
     {"gattClientRefreshNative", "(ILjava/lang/String;)V",
      (void*)gattClientRefreshNative},
     {"gattClientSearchServiceNative", "(IZJJ)V",
@@ -1820,6 +2168,9 @@ static JNINativeMethod sMethods[] = {
      (void*)gattServerConnectNative},
     {"gattServerDisconnectNative", "(ILjava/lang/String;I)V",
      (void*)gattServerDisconnectNative},
+    {"gattServerSetPreferredPhyNative", "(IIIII)V",
+     (void*)gattServerSetPreferredPhyNative},
+    {"gattServerReadPhyNative", "(II)V", (void*)gattServerReadPhyNative},
     {"gattServerAddServiceNative", "(ILjava/util/List;)V",
      (void*)gattServerAddServiceNative},
     {"gattServerStopServiceNative", "(II)V",
@@ -1843,6 +2194,9 @@ int register_com_android_bluetooth_gatt(JNIEnv* env) {
   register_success &= jniRegisterNativeMethods(
       env, "com/android/bluetooth/gatt/AdvertiseManager", sAdvertiseMethods,
       NELEM(sAdvertiseMethods));
+  register_success &= jniRegisterNativeMethods(
+      env, "com/android/bluetooth/gatt/PeriodicScanManager",
+      sPeriodicScanMethods, NELEM(sPeriodicScanMethods));
   return register_success &
          jniRegisterNativeMethods(env, "com/android/bluetooth/gatt/GattService",
                                   sMethods, NELEM(sMethods));
