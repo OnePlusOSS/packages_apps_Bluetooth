@@ -289,6 +289,11 @@ public class PanService extends ProfileService {
             Log.e(TAG, "Pan Device not disconnected: " + device);
             return false;
         }
+        /* Cancel discovery while initiating PANU connection, if It's in progress */
+        if (mAdapter != null && mAdapter.isDiscovering()) {
+            Log.d(TAG,"Inquiry is going on, Cancelling inquiry while initiating PANU connection");
+            mAdapter.cancelDiscovery();
+        }
         Message msg = mHandler.obtainMessage(MESSAGE_CONNECT,device);
         mHandler.sendMessage(msg);
         return true;
