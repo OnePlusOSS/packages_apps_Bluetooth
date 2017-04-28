@@ -107,6 +107,7 @@ public class BluetoothPbapVcardManager {
     static final String CALLLOG_SORT_ORDER = Calls._ID + " DESC";
 
     private static final int NEED_SEND_BODY = -1;
+    protected static boolean isPullVcardEntry = false;
 
     public BluetoothPbapVcardManager(final Context context) {
         mContext = context;
@@ -119,10 +120,13 @@ public class BluetoothPbapVcardManager {
      * @param vcardType21
      * @return
      */
-    private final String getOwnerPhoneNumberVcardFromProfile(
-            final boolean vcardType21, final byte[] filter) {
+    private final String getOwnerPhoneNumberVcardFromProfile(final boolean vcardType21,
+            boolean ignorefilter, final byte[] filter) {
         // Currently only support Generic Vcard 2.1 and 3.0
         int vcardType;
+        String vcard = null;
+        VCardFilter vcardfilter = new VCardFilter(ignorefilter ? null : filter);
+
         if (vcardType21) {
             vcardType = VCardConfig.VCARD_TYPE_V21_GENERIC;
         } else {
@@ -133,13 +137,15 @@ public class BluetoothPbapVcardManager {
             vcardType |= VCardConfig.FLAG_REFRAIN_IMAGE_EXPORT;
         }
 
-        return BluetoothPbapUtils.createProfileVCard(mContext, vcardType,filter);
+        return BluetoothPbapFixes.initCreateProfileVCard(vcard, mContext, vcardType,
+                filter, vcardType21, ignorefilter, vcardfilter);
     }
 
-    public final String getOwnerPhoneNumberVcard(final boolean vcardType21, final byte[] filter) {
+    public final String getOwnerPhoneNumberVcard(final boolean vcardType21,
+            boolean ignorefilter, final byte[] filter) {
         //Owner vCard enhancement: Use "ME" profile if configured
         if (BluetoothPbapConfig.useProfileForOwnerVcard()) {
-            String vcard = getOwnerPhoneNumberVcardFromProfile(vcardType21, filter);
+            String vcard = getOwnerPhoneNumberVcardFromProfile(vcardType21, ignorefilter, filter);
             if (vcard != null && vcard.length() != 0) {
                 return vcard;
             }
@@ -159,6 +165,9 @@ public class BluetoothPbapVcardManager {
         switch (type) {
             case BluetoothPbapObexServer.ContentType.PHONEBOOK:
                 size = getContactsSize();
+                break;
+            case BluetoothPbapObexServer.ContentType.SIM_PHONEBOOK:
+                size = BluetoothPbapObexServer.mVcardSimManager.getSIMContactsSize();
                 break;
             default:
                 size = getCallHistorySize(type);
@@ -263,7 +272,7 @@ public class BluetoothPbapVcardManager {
         if (ownerName == null || ownerName.length()==0) {
             ownerName = BluetoothPbapService.getLocalPhoneName();
         }
-        nameList.add(ownerName);
+        nameList.add(ownerName + "," + "0");
         //End enhancement
 
         final Uri myUri = DevicePolicyUtils.getEnterprisePhoneUri(mContext);
@@ -326,7 +335,7 @@ public class BluetoothPbapVcardManager {
         if (ownerName == null || ownerName.length() == 0) {
             ownerName = BluetoothPbapService.getLocalPhoneName();
         }
-        nameList.add(ownerName);
+        nameList.add(ownerName + "," + "0");
         // End enhancement
 
         final Uri myUri = DevicePolicyUtils.getEnterprisePhoneUri(mContext);
@@ -559,7 +568,7 @@ public class BluetoothPbapVcardManager {
             }
         }
 
-        if (vcardselect)
+        if (BluetoothPbapFixes.isSupportedPbap12 && vcardselect)
             return composeContactsAndSendSelectedVCards(op, contactIdCursor, vcardType21,
                     ownerVCard, needSendBody, pbSize, ignorefilter, filter, vcardselector,
                     vcardselectorop);
@@ -613,6 +622,7 @@ public class BluetoothPbapVcardManager {
          * @return a cursor containing contact id of {@code offset} contact.
          */
         public static Cursor filterByOffset(Cursor contactCursor, int offset) {
+            isPullVcardEntry = true;
             return filterByRange(contactCursor, offset, offset);
         }
 
@@ -633,6 +643,10 @@ public class BluetoothPbapVcardManager {
             final MatrixCursor contactIdsCursor = new MatrixCursor(new String[]{
                     Phone.CONTACT_ID
             });
+            if (startPoint == endPoint && isPullVcardEntry) {
+                return BluetoothPbapFixes.getVcardEntry(contactCursor,
+                        contactIdsCursor, contactIdColumn, startPoint);
+            }
             while (contactCursor.moveToNext() && currentOffset <= endPoint) {
                 long currentContactId = contactCursor.getLong(contactIdColumn);
                 if (previousContactId != currentContactId) {
@@ -938,10 +952,7 @@ public class BluetoothPbapVcardManager {
         String Vcard = "";
             for (int i=0; i < attr.length; i++) {
                 if(attr[i].startsWith("TEL")) {
-                    attr[i] = attr[i].replace("(", "");
-                    attr[i] = attr[i].replace(")", "");
-                    attr[i] = attr[i].replace("-", "");
-                    attr[i] = attr[i].replace(" ", "");
+                    attr[i] = BluetoothPbapFixes.processTelNumberAndTag(attr[i]);
                 }
             }
 
