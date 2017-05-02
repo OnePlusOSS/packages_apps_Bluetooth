@@ -18,6 +18,8 @@ package com.android.bluetooth.avrcp;
 
 import android.media.session.MediaSession;
 
+import com.android.bluetooth.Utils;
+
 import java.util.List;
 import java.util.Arrays;
 import java.util.ArrayDeque;
@@ -36,20 +38,33 @@ class AvrcpCmd {
     /* Helper classes to pass parameters from callbacks to Avrcp handler */
     class FolderItemsCmd {
         byte mScope;
-        int mStartItem;
-        int mEndItem;
+        long mStartItem;
+        long mEndItem;
         byte mNumAttr;
         int[] mAttrIDs;
         public byte[] mAddress;
 
-        public FolderItemsCmd(byte[] address,byte scope, int startItem, int endItem, byte numAttr,
-                int[] attrIds) {
+        public FolderItemsCmd(byte[] address, byte scope, long startItem, long endItem,
+                byte numAttr, int[] attrIds) {
             mAddress = address;
             this.mScope = scope;
             this.mStartItem = startItem;
             this.mEndItem = endItem;
             this.mNumAttr = numAttr;
             this.mAttrIDs = attrIds;
+        }
+
+        public String toString() {
+            StringBuilder sb = new StringBuilder();
+            sb.append("[FolderItemCmd: scope " + mScope);
+            sb.append(" start " + mStartItem);
+            sb.append(" end " + mEndItem);
+            sb.append(" numAttr " + mNumAttr);
+            sb.append(" attrs: ");
+            for (int i = 0; i < mNumAttr; i++) {
+                sb.append(mAttrIDs[i] + " ");
+            }
+            return sb.toString();
         }
     }
 
@@ -69,6 +84,18 @@ class AvrcpCmd {
             mUidCounter = uidCounter;
             mNumAttr = numAttr;
             mAttrIDs = attrIDs;
+        }
+
+        public String toString() {
+            StringBuilder sb = new StringBuilder();
+            sb.append("[ItemAttrCmd: scope " + mScope);
+            sb.append(" uid " + Utils.byteArrayToString(mUid));
+            sb.append(" numAttr " + mNumAttr);
+            sb.append(" attrs: ");
+            for (int i = 0; i < mNumAttr; i++) {
+                sb.append(mAttrIDs[i] + " ");
+            }
+            return sb.toString();
         }
     }
 
