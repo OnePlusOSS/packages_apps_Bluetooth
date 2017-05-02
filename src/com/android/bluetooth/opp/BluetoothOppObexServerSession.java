@@ -342,7 +342,7 @@ public class BluetoothOppObexServerSession extends ServerRequestHandler implemen
         }
         mAccepted = mInfo.mConfirm;
 
-        if (V) Log.v(TAG, "after confirm: userAccepted=" + mAccepted);
+        if (D) Log.d(TAG, "after confirm: userAccepted=" + mAccepted);
         int status = BluetoothShare.STATUS_SUCCESS;
 
         if (mAccepted == BluetoothShare.USER_CONFIRMATION_CONFIRMED

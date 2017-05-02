@@ -159,7 +159,7 @@ public class BluetoothOppService extends ProfileService implements IObexConnecti
 
     @Override
     protected void create() {
-        if (V) Log.v(TAG, "onCreate");
+        if (D) Log.d(TAG, "onCreate");
         mShares = Lists.newArrayList();
         mBatchs = Lists.newArrayList();
         mObserver = new BluetoothShareContentObserver();
