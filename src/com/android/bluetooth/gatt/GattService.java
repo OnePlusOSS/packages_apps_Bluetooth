@@ -1687,6 +1687,10 @@ public class GattService extends ProfileService {
             if (DBG) Log.d(TAG, "unreg:" + appId);
             unregisterClient(appId);
         }
+        for (Integer appId : mServerMap.getAllAppsIds()) {
+            if (DBG) Log.d(TAG, "unreg:" + appId);
+            unregisterServer(appId);
+        }
     }
 
     /**************************************************************************
