@@ -162,7 +162,7 @@ class BluetoothOppNotification {
     public void updateNotification() {
         synchronized (BluetoothOppNotification.this) {
             mPendingUpdate++;
-            if (mPendingUpdate > 1) {
+            if ((mPendingUpdate > 1) && (mUpdateNotificationThread != null)) {
                 if (V) Log.v(TAG, "update too frequent, put in queue");
                 return;
             }
@@ -376,10 +376,10 @@ class BluetoothOppNotification {
         int inboundNum;
         int inboundSuccNumber = 0;
         int inboundFailNumber = 0;
-
         // Creating outbound notification
+        String selection = mBtTurnedOff ? WHERE_ALL_OUTBOUND : WHERE_COMPLETED_OUTBOUND;
         Cursor cursor = mContentResolver.query(BluetoothShare.CONTENT_URI, null,
-                WHERE_COMPLETED_OUTBOUND, null, BluetoothShare.TIMESTAMP + " DESC");
+                selection, null, BluetoothShare.TIMESTAMP + " DESC");
         if (cursor == null) {
             return;
         }
@@ -394,7 +394,8 @@ class BluetoothOppNotification {
             }
             int status = cursor.getInt(statusIndex);
 
-            if (BluetoothShare.isStatusError(status)) {
+            if (BluetoothShare.isStatusError(status)
+                    || (mBtTurnedOff && BluetoothShare.isStatusInformational(status))) {
                 outboundFailNumber++;
             } else {
                 outboundSuccNumber++;
@@ -563,6 +564,7 @@ class BluetoothOppNotification {
                           .setSmallIcon(R.drawable.bt_incomming_file_notification)
                           .build();
           mNotificationMgr.notify(NOTIFICATION_ID_PROGRESS, n);
+          Log.i(TAG, " Incoming Notification ");
         }
         cursor.close();
     }
@@ -571,4 +573,10 @@ class BluetoothOppNotification {
         mBtTurnedOff = true;
         updateNotification();
     }
+
+    private static final String WHERE_ALL_OUTBOUND = visible +
+            " AND " + not_through_handover + " AND " + "("
+            + BluetoothShare.DIRECTION + " == " + BluetoothShare.DIRECTION_OUTBOUND + ")";
+
+    private boolean mUpdateCount = false;
 }

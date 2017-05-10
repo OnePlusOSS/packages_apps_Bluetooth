@@ -109,6 +109,7 @@ public class BluetoothOppObexServerSession extends ServerRequestHandler implemen
         PowerManager pm = (PowerManager)mContext.getSystemService(Context.POWER_SERVICE);
         mPartialWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, TAG);
         mPartialWakeLock.setReferenceCounted(false);
+        BTOppUtils.acquireFullWakeLock(pm, TAG);
     }
 
     public void unblock() {
@@ -123,6 +124,9 @@ public class BluetoothOppObexServerSession extends ServerRequestHandler implemen
         try {
             if (D) Log.d(TAG, "Create ServerSession with transport " + mTransport.toString());
             mSession = new ServerSession(mTransport, this, null);
+            if(BTOppUtils.isA2DPPlaying) {
+                mSession.reduceMTU(true);
+            }
         } catch (IOException e) {
             Log.e(TAG, "Create server session error" + e);
         }
@@ -279,27 +283,30 @@ public class BluetoothOppObexServerSession extends ServerRequestHandler implemen
         values.put(BluetoothShare.DIRECTION, BluetoothShare.DIRECTION_INBOUND);
         values.put(BluetoothShare.TIMESTAMP, mTimestamp);
 
+        boolean needConfirm = true;
+
         /** It's not first put if !serverBlocking, so we auto accept it */
         if (!mServerBlocking && (mAccepted == BluetoothShare.USER_CONFIRMATION_CONFIRMED ||
                 mAccepted == BluetoothShare.USER_CONFIRMATION_AUTO_CONFIRMED)) {
             values.put(BluetoothShare.USER_CONFIRMATION,
                     BluetoothShare.USER_CONFIRMATION_AUTO_CONFIRMED);
+            needConfirm = false;
         }
 
         if (isWhitelisted) {
             values.put(BluetoothShare.USER_CONFIRMATION,
                     BluetoothShare.USER_CONFIRMATION_HANDOVER_CONFIRMED);
-
+            needConfirm = false;
         }
 
         Uri contentUri = mContext.getContentResolver().insert(BluetoothShare.CONTENT_URI, values);
         mLocalShareInfoId = Integer.parseInt(contentUri.getPathSegments().get(1));
-
+        BTOppUtils.isTurnOnScreen(mContext ,needConfirm);
         if (V) Log.v(TAG, "insert contentUri: " + contentUri);
         if (V) Log.v(TAG, "mLocalShareInfoId = " + mLocalShareInfoId);
 
         synchronized (this) {
-            mPartialWakeLock.acquire();
+            BTOppUtils.acquirePartialWakeLock(mPartialWakeLock);
             mServerBlocking = true;
             try {
 
@@ -420,6 +427,7 @@ public class BluetoothOppObexServerSession extends ServerRequestHandler implemen
         /*
          * implement receive file
          */
+        long beginTime = 0;
         int status = -1;
         BufferedOutputStream bos = null;
 
@@ -455,6 +463,7 @@ public class BluetoothOppObexServerSession extends ServerRequestHandler implemen
             int readLength = 0;
             long timestamp = 0;
             try {
+                beginTime = System.currentTimeMillis();
                 while ((!mInterrupted) && (position != fileInfo.mLength)) {
 
                     if (V) timestamp = System.currentTimeMillis();
@@ -492,6 +501,7 @@ public class BluetoothOppObexServerSession extends ServerRequestHandler implemen
                 } else {
                     status = BluetoothShare.STATUS_OBEX_DATA_ERROR;
                 }
+                BTOppUtils.cleanFile(mFileInfo.mFileName);
                 error = true;
             }
         }
@@ -502,6 +512,7 @@ public class BluetoothOppObexServerSession extends ServerRequestHandler implemen
         } else {
             if (position == fileInfo.mLength) {
                 if (D) Log.d(TAG, "Receiving file completed for " + fileInfo.mFileName);
+                BTOppUtils.throughputInKbps(fileInfo.mLength, beginTime);
                 status = BluetoothShare.STATUS_SUCCESS;
             } else {
                 if (D) Log.d(TAG, "Reading file failed at " + position + " of " + fileInfo.mLength);
@@ -583,7 +594,9 @@ public class BluetoothOppObexServerSession extends ServerRequestHandler implemen
     }
 
     private synchronized void releaseWakeLocks() {
+        BTOppUtils.releaseFullWakeLock();
         if (mPartialWakeLock.isHeld()) {
+            if (D) Log.d(TAG, "releasing partial wakelock");
             mPartialWakeLock.release();
         }
     }
