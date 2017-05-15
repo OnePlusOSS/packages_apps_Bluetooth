@@ -43,7 +43,7 @@ import java.util.ArrayList;
 
 public class AddressedMediaPlayer {
     static private final String TAG = "AddressedMediaPlayer";
-    static private final Boolean DEBUG = false;
+    static private final Boolean DEBUG = Log.isLoggable(TAG, Log.DEBUG);
 
     static private final long SINGLE_QID = 1;
     static private final String UNKNOWN_TITLE = "(unknown)";
@@ -446,8 +446,8 @@ public class AddressedMediaPlayer {
                     break;
 
                 case AvrcpConstants.ATTRID_COVER_ART:
-                    Log.e(TAG, "getAttrValue: Cover art attribute not supported");
-                    return null;
+                    attrValue = Avrcp.getImgHandleFromTitle(desc.getTitle().toString());
+                    break;
 
                 default:
                     Log.e(TAG, "getAttrValue: Unknown attribute ID requested: " + attr);

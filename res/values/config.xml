@@ -78,6 +78,9 @@
     <!-- To Enable/Disable Email Support in MAP -->
     <bool name="map_email_support">true</bool>
 
+    <!-- To Enable/Disable Coverart Support in AVRCP -->
+    <bool name="avrcp_coverart_support">true</bool>
+
     <!-- Configuring priorities of A2DP source codecs. Larger value means
          higher priority. Value -1 means the codec is disabled.
          Value 0 is reserved and should not be used here. Enabled codecs

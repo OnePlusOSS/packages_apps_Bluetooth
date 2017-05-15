@@ -41,8 +41,8 @@ import java.util.Stack;
  ************************************************************************************************/
 
 class BrowsedMediaPlayer {
-    private static final boolean DEBUG = false;
     private static final String TAG = "BrowsedMediaPlayer";
+    private static final boolean DEBUG = Log.isLoggable(TAG, Log.DEBUG);
 
     /* connection state with MediaBrowseService */
     private static final int DISCONNECTED = 0;
@@ -651,13 +651,15 @@ class BrowsedMediaPlayer {
 
                 case AvrcpConstants.ATTRID_GENRE:
                     attrValue = extras.getString(MediaMetadata.METADATA_KEY_GENRE);
+                    break;
 
                 case AvrcpConstants.ATTRID_PLAY_TIME:
                     attrValue = extras.getString(MediaMetadata.METADATA_KEY_DURATION);
+                    break;
 
                 case AvrcpConstants.ATTRID_COVER_ART:
-                    Log.e(TAG, "getAttrValue: Cover art attribute not supported");
-                    return null;
+                    attrValue = Avrcp.getImgHandleFromTitle(desc.getTitle().toString());
+                    break;
 
                 default:
                     Log.e(TAG, "getAttrValue: Unknown attribute ID requested: " + attr);

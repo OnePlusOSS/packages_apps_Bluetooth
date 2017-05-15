@@ -129,6 +129,7 @@ final class AvrcpConstants {
     static final short AVRC_PF_UID_UNIQUE_BIT_NO = 62;
     static final short AVRC_PF_NOW_PLAY_BIT_NO = 65;
     static final short AVRC_PF_GET_NUM_OF_ITEMS_BIT_NO = 67;
+    static final short AVRC_PF_COVER_ART_BIT_NO = 68;
 
     static final byte PLAYER_TYPE_AUDIO = 1;
     static final int PLAYER_SUBTYPE_NONE = 0;
