@@ -353,11 +353,20 @@ public class BluetoothMapMasInstance implements IObexConnectionHandler {
 
             mMnsClient = mnsClient;
             BluetoothMapObexServer mapServer;
-            mObserver = new  BluetoothMapContentObserver(mContext,
+            if (mAccount != null && mAccount.getType() == TYPE.EMAIL) {
+                Log.d(TAG, "startObexServerSession getType = " + mAccount.getType());
+                mObserver = new  BluetoothMapContentObserverEmail(mContext,
                                                          mMnsClient,
                                                          this,
                                                          mAccount,
                                                          mEnableSmsMms);
+            } else {
+                mObserver = new  BluetoothMapContentObserver(mContext,
+                                                         mMnsClient,
+                                                         this,
+                                                         mAccount,
+                                                         mEnableSmsMms);
+            }
             mObserver.init();
             mapServer = new BluetoothMapObexServer(mServiceHandler,
                                                     mContext,
@@ -392,7 +401,7 @@ public class BluetoothMapMasInstance implements IObexConnectionHandler {
         return (mConnSocket != null);
     }
 
-    public void shutdown() {
+    public synchronized void shutdown() {
         if (D) Log.d(TAG, "MAP Service shutdown");
 
         if (mServerSession != null) {
@@ -421,6 +430,7 @@ public class BluetoothMapMasInstance implements IObexConnectionHandler {
 
 
     private final synchronized void closeServerSockets(boolean block) {
+        if(V) Log.d(TAG, "closeServerSock");
         // exit SocketAcceptThread early
         ObexServerSockets sockets = mServerSockets;
         if (sockets != null) {
@@ -430,6 +440,7 @@ public class BluetoothMapMasInstance implements IObexConnectionHandler {
     }
 
     private final synchronized void closeConnectionSocket() {
+        if(V) Log.d(TAG, "closeConnectionSock");
         if (mConnSocket != null) {
             try {
                 mConnSocket.close();
@@ -459,6 +470,7 @@ public class BluetoothMapMasInstance implements IObexConnectionHandler {
         /* Signal to the service that we have received an incoming connection.
          */
         boolean isValid = mMapService.onConnect(device, BluetoothMapMasInstance.this);
+        if(V) Log.d(TAG, "onConnect");
 
         if(isValid == true) {
             mRemoteDevice = device;

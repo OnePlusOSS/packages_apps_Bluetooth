@@ -30,6 +30,7 @@ import android.net.Uri;
 import android.util.Log;
 
 import com.android.bluetooth.mapapi.BluetoothMapContract;
+import com.android.bluetooth.R;
 
 /**
  * Class to construct content observers for for email applications on the system.
@@ -59,7 +60,14 @@ public class BluetoothMapAppObserver{
         mContext    = context;
         mMapService = mapService;
         mResolver   = context.getContentResolver();
-        mLoader     = new BluetoothMapAccountLoader(mContext);
+        boolean isEmailSupported = context.getResources().getBoolean
+                (R.bool.map_email_support);
+        if (D) Log.d(TAG, "isEmailSupported :" + isEmailSupported);
+        if (isEmailSupported) {
+            mLoader = new BluetoothMapAccountEmailLoader(mContext);
+        } else {
+            mLoader = new BluetoothMapAccountLoader(mContext);
+        }
         mFullList   = mLoader.parsePackages(false); /* Get the current list of apps */
         createReceiver();
         initObservers();

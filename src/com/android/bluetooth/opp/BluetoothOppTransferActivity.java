@@ -370,9 +370,7 @@ public class BluetoothOppTransferActivity extends AlertActivity implements
                     ((NotificationManager)getSystemService(NOTIFICATION_SERVICE))
                             .cancel(mTransInfo.mID);
 
-                    // retry the failed transfer
-                    BluetoothOppUtility.retryTransfer(this, mTransInfo);
-
+                    BTOppUtils.retryFailedTrasfer(this, mTransInfo);
                     BluetoothDevice remoteDevice = mAdapter.getRemoteDevice(mTransInfo.mDestAddr);
 
                     // Display toast message

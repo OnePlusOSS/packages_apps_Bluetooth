@@ -1147,17 +1147,6 @@ static int createSocketChannelNative(JNIEnv* env, jobject object, jint type,
   return socket_fd;
 }
 
-static jboolean configHciSnoopLogNative(JNIEnv* env, jobject obj,
-                                        jboolean enable) {
-  ALOGV("%s", __func__);
-
-  if (!sBluetoothInterface) return JNI_FALSE;
-
-  int ret = sBluetoothInterface->config_hci_snoop_log(enable);
-
-  return (ret == BT_STATUS_SUCCESS) ? JNI_TRUE : JNI_FALSE;
-}
-
 static int readEnergyInfo() {
   ALOGV("%s", __func__);
 
@@ -1224,6 +1213,68 @@ static void interopDatabaseAddNative(JNIEnv* env, jobject obj, int feature,
   env->ReleaseByteArrayElements(address, addr, 0);
 }
 
+
+static int getSocketOptNative(JNIEnv *env, jobject obj, jint type, jint channel, jint optionName,
+                                        jbyteArray optionVal) {
+    ALOGV("%s:",__FUNCTION__);
+
+    jbyte *option_val = NULL;
+    int option_len;
+    bt_status_t status;
+
+    if (!sBluetoothSocketInterface) return -1;
+
+    option_val = env->GetByteArrayElements(optionVal, NULL);
+    if (option_val == NULL) {
+        ALOGE("getSocketOptNative :jniThrowIOException ");
+        jniThrowIOException(env, EINVAL);
+        return -1;
+    }
+
+    if ( (status = sBluetoothSocketInterface->get_sock_opt((btsock_type_t)type, channel,
+         (btsock_option_type_t) optionName, (void *) option_val, &option_len)) !=
+                                                           BT_STATUS_SUCCESS) {
+        ALOGE("get_sock_opt failed: %d", status);
+        goto Fail;
+    }
+    env->ReleaseByteArrayElements(optionVal, option_val, 0);
+
+    return option_len;
+Fail:
+    env->ReleaseByteArrayElements(optionVal, option_val, 0);
+    return -1;
+}
+
+static int setSocketOptNative(JNIEnv *env, jobject obj, jint type, jint channel, jint optionName,
+                                        jbyteArray optionVal, jint optionLen) {
+    ALOGV("%s:",__FUNCTION__);
+
+    jbyte *option_val = NULL;
+    bt_status_t status;
+
+    if (!sBluetoothSocketInterface) return -1;
+
+    option_val = env->GetByteArrayElements(optionVal, NULL);
+    if (option_val == NULL) {
+        ALOGE("setSocketOptNative:jniThrowIOException ");
+        jniThrowIOException(env, EINVAL);
+        return -1;
+    }
+
+    if ( (status = sBluetoothSocketInterface->set_sock_opt((btsock_type_t)type, channel,
+         (btsock_option_type_t) optionName, (void *) option_val, optionLen)) !=
+                                                         BT_STATUS_SUCCESS) {
+        ALOGE("set_sock_opt failed: %d", status);
+        goto Fail;
+    }
+    env->ReleaseByteArrayElements(optionVal, option_val, 0);
+
+    return 0;
+Fail:
+    env->ReleaseByteArrayElements(optionVal, option_val, 0);
+    return -1;
+}
+
 static JNINativeMethod sMethods[] = {
     /* name, signature, funcPtr */
     {"classInitNative", "()V", (void*)classInitNative},
@@ -1250,14 +1301,15 @@ static JNINativeMethod sMethods[] = {
     {"connectSocketNative", "([BI[BIII)I", (void*)connectSocketNative},
     {"createSocketChannelNative", "(ILjava/lang/String;[BIII)I",
      (void*)createSocketChannelNative},
-    {"configHciSnoopLogNative", "(Z)Z", (void*)configHciSnoopLogNative},
     {"alarmFiredNative", "()V", (void*)alarmFiredNative},
     {"readEnergyInfo", "()I", (void*)readEnergyInfo},
     {"dumpNative", "(Ljava/io/FileDescriptor;[Ljava/lang/String;)V",
      (void*)dumpNative},
     {"factoryResetNative", "()Z", (void*)factoryResetNative},
     {"interopDatabaseClearNative", "()V", (void*)interopDatabaseClearNative},
-    {"interopDatabaseAddNative", "(I[BI)V", (void*)interopDatabaseAddNative}};
+    {"interopDatabaseAddNative", "(I[BI)V", (void*)interopDatabaseAddNative},
+    {"getSocketOptNative", "(III[B)I", (void*) getSocketOptNative},
+    {"setSocketOptNative", "(III[BI)I", (void*) setSocketOptNative}};
 
 int register_com_android_bluetooth_btservice_AdapterService(JNIEnv* env) {
   return jniRegisterNativeMethods(
