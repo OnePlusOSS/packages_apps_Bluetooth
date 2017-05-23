@@ -289,6 +289,7 @@ public abstract class BluetoothMapbMessage {
                         // Empty phone number - ignore
                 }
                 else if(line.startsWith("EMAIL:")){
+                    line = line.replace("&lt;", "<").replace("&gt;", ">");
                     parts = line.split("[^\\\\]:"); // Split on "un-escaped" :
                     if(parts.length == 2) {
                         String[] subParts = parts[1].split("[^\\\\];");
@@ -384,10 +385,9 @@ public abstract class BluetoothMapbMessage {
         public String getLine() {
             try {
                 byte[] line = getLineAsBytes();
-                if (line.length == 0)
+                if (BluetoothMapFixes.isLastLine(line))
                     return null;
-                else
-                    return new String(line, "UTF-8");
+                return new String(line, "UTF-8");
             } catch (UnsupportedEncodingException e) {
                 Log.w(TAG, e);
                 return null;

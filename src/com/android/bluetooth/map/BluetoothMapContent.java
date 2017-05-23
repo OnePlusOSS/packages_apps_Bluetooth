@@ -1231,7 +1231,10 @@ public class BluetoothMapContent {
         if(subLength == BluetoothMapAppParams.INVALID_VALUE_PARAMETER)
             subLength = 256;
 
-        if ((ap.getParameterMask() & MASK_SUBJECT) != 0) {
+        //Fix Subject Display issue with HONDA Carkit - Ignore subject Mask.
+        if (BluetoothMapService.getRemoteDevice().getAddress()
+                .startsWith(RemoteDeviceWorkArounds.HONDA_CARKIT)
+                || (ap.getParameterMask() & MASK_SUBJECT) != 0) {
             if (fi.mMsgType == FilterInfo.TYPE_SMS) {
                 subject = c.getString(fi.mSmsColSubject);
             } else if (fi.mMsgType == FilterInfo.TYPE_MMS) {
@@ -3414,6 +3417,9 @@ public class BluetoothMapContent {
                     message.setType(TYPE.SMS_GSM);
                 } else if (tm.getPhoneType() == TelephonyManager.PHONE_TYPE_CDMA) {
                     message.setType(TYPE.SMS_CDMA);
+                } else {
+                    // set SMS_GSM by default
+                    message.setType(TYPE.SMS_GSM);
                 }
                 message.setVersionString(mMessageVersion);
                 String read = c.getString(c.getColumnIndex(Sms.READ));
