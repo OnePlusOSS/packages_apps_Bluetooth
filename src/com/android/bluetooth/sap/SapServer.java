@@ -5,6 +5,7 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothSap;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -422,6 +423,7 @@ public class SapServer extends Thread implements Callback {
             /* This is expected during shutdown */
             Log.i(TAG, "IOException received, this is probably a shutdown signal, cleaning up...");
         } catch (Exception e) {
+            releaseThread();
             /* TODO: Change to the needed Exception types when done testing */
             Log.w(TAG, e);
         } finally {
@@ -916,6 +918,15 @@ public class SapServer extends Thread implements Callback {
             return "SAP_MSG_RIL_IND";
         default:
             return "Unknown message ID";
+        }
+    }
+
+    private void releaseThread() {
+        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+        int state = (adapter != null) ? adapter.getState() : -1;
+        if (DEBUG) Log.d(TAG, "BT State :" + state);
+        if (state != BluetoothAdapter.STATE_ON) {
+            mDeinitSignal.countDown();
         }
     }
 
