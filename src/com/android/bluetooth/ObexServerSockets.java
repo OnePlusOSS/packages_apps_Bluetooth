@@ -241,12 +241,10 @@ public class ObexServerSockets {
      * Signal to the {@link IObexConnectionHandler} that an error have occurred.
      */
     synchronized private void onAcceptFailed() {
-        /* Do not block for Accept thread cleanup.
-         * Fix Handler Thread block during BT Turn OFF.*/
         shutdown(false);
         BluetoothAdapter mAdapter = BluetoothAdapter.getDefaultAdapter();
-        if((mAdapter != null) && (mAdapter.getState() == BluetoothAdapter.STATE_ON)) {
-            Log.d(TAG,"onAcceptFailed() calling shutdown...");
+        if ((mAdapter != null) && (mAdapter.getState() == BluetoothAdapter.STATE_ON)) {
+            Log.d(TAG, "onAcceptFailed() calling shutdown...");
             mConHandler.onAcceptFailed();
         }
     }
