@@ -19,6 +19,7 @@ import android.bluetooth.le.ScanSettings;
 import android.os.Binder;
 import android.os.WorkSource;
 import android.os.ServiceManager;
+import android.os.SystemClock;
 import android.os.RemoteException;
 import com.android.internal.app.IBatteryStats;
 import java.text.DateFormat;
@@ -128,7 +129,7 @@ import com.android.bluetooth.btservice.BluetoothProto;
 
         this.scansStarted++;
         isScanning = true;
-        startTime = System.currentTimeMillis();
+        startTime = SystemClock.elapsedRealtime();
 
         LastScan scan = new LastScan(startTime, 0, false, false, filtered);
         if (settings != null) {
@@ -145,7 +146,8 @@ import com.android.bluetooth.btservice.BluetoothProto;
         gattService.addScanEvent(scanEvent);
 
         try {
-            batteryStats.noteBleScanStarted(workSource);
+            boolean isUnoptimized = !(scan.filtered || scan.background || scan.opportunistic);
+            batteryStats.noteBleScanStarted(workSource, isUnoptimized);
         } catch (RemoteException e) {
             /* ignore */
         }
@@ -157,7 +159,7 @@ import com.android.bluetooth.btservice.BluetoothProto;
 
         this.scansStopped++;
         isScanning = false;
-        stopTime = System.currentTimeMillis();
+        stopTime = SystemClock.elapsedRealtime();
         long scanDuration = stopTime - startTime;
 
         minScanTime = Math.min(scanDuration, minScanTime);
@@ -203,8 +205,8 @@ import com.android.bluetooth.btservice.BluetoothProto;
             return false;
         }
 
-        return (System.currentTimeMillis() - lastScans.get(0).timestamp) <
-            EXCESSIVE_SCANNING_PERIOD_MS;
+        return (SystemClock.elapsedRealtime() - lastScans.get(0).timestamp)
+                < EXCESSIVE_SCANNING_PERIOD_MS;
     }
 
     synchronized boolean isScanningTooLong() {
@@ -212,7 +214,7 @@ import com.android.bluetooth.btservice.BluetoothProto;
             return false;
         }
 
-        return (System.currentTimeMillis() - startTime) > SCAN_TIMEOUT_MS;
+        return (SystemClock.elapsedRealtime() - startTime) > SCAN_TIMEOUT_MS;
     }
 
     // This function truncates the app name for privacy reasons. Apps with
@@ -236,7 +238,7 @@ import com.android.bluetooth.btservice.BluetoothProto;
     }
 
     synchronized void dumpToString(StringBuilder sb) {
-        long currTime = System.currentTimeMillis();
+        long currTime = SystemClock.elapsedRealtime();
         long maxScan = maxScanTime;
         long minScan = minScanTime;
         long scanDuration = 0;
@@ -287,7 +289,8 @@ import com.android.bluetooth.btservice.BluetoothProto;
 
             for (int i = 0; i < lastScansSize; i++) {
                 LastScan scan = lastScans.get(i);
-                Date timestamp = new Date(scan.timestamp);
+                Date timestamp = new Date(System.currentTimeMillis() - SystemClock.elapsedRealtime()
+                        + scan.timestamp);
                 sb.append("    " + dateFormat.format(timestamp) + " - ");
                 sb.append(scan.duration + "ms ");
                 if (scan.opportunistic) sb.append("Opp ");
@@ -319,7 +322,7 @@ import com.android.bluetooth.btservice.BluetoothProto;
             Iterator<ContextMap.Connection> ii = connections.iterator();
             while(ii.hasNext()) {
                 ContextMap.Connection connection = ii.next();
-                long connectionTime = System.currentTimeMillis() - connection.startTime;
+                long connectionTime = SystemClock.elapsedRealtime() - connection.startTime;
                 sb.append("    " + connection.connId + ": " +
                           connection.address + " " + connectionTime + "ms\n");
             }
