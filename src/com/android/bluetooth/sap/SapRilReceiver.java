@@ -239,6 +239,7 @@ public class SapRilReceiver {
 
     public void resetSapProxy() {
         synchronized (mSapProxyLock) {
+            releaseSapProxy();
             mSapProxy = null;
         }
     }
@@ -350,6 +351,17 @@ public class SapRilReceiver {
     private void sendRilIndMessage(SapMessage sapMsg) {
         Message newMsg = mSapServerMsgHandler.obtainMessage(SapServer.SAP_MSG_RIL_IND, sapMsg);
         mSapServerMsgHandler.sendMessage(newMsg);
+    }
+
+    private void releaseSapProxy() {
+        if (DEBUG) Log.d(TAG, "releaseSapProxy :" + mSapProxy);
+        try {
+            if (mSapProxy != null) {
+                mSapProxy.unlinkToDeath(mSapProxyDeathRecipient);
+            }
+        } catch (RemoteException | RuntimeException e) {
+            Log.e(TAG, "releaseSapProxy: exception: " + e);
+        }
     }
 
 }
