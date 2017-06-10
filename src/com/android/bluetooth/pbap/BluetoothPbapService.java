@@ -80,6 +80,7 @@ import javax.obex.ServerSession;
 
 public class BluetoothPbapService extends ProfileService implements IObexConnectionHandler {
     private static final String TAG = "BluetoothPbapService";
+    public static final String LOG_TAG = "BluetoothPbap";
 
     /**
      * To enable PBAP DEBUG/VERBOSE logging - run below cmd in adb shell, and
@@ -90,8 +91,7 @@ public class BluetoothPbapService extends ProfileService implements IObexConnect
 
     public static final boolean DEBUG = true;
 
-    public static final boolean VERBOSE = false;
-
+    public static final boolean VERBOSE = Log.isLoggable(LOG_TAG, Log.VERBOSE);
     /**
      * Intent indicating incoming obex authentication request which is from
      * PCE(Carkit)
@@ -202,7 +202,7 @@ public class BluetoothPbapService extends ProfileService implements IObexConnect
 
     private AlarmManager mAlarmManager = null;
 
-    private int mSdpHandle = -1;
+    protected int mSdpHandle = -1;
 
     private boolean mRemoveTimeoutMsg = false;
 
@@ -213,6 +213,9 @@ public class BluetoothPbapService extends ProfileService implements IObexConnect
     private boolean isRegisteredObserver = false;
 
     protected Context mContext;
+
+    /* Indicate PBAP Service internal state: started or stopped */
+    protected boolean mStartError = true;
 
     // package and class name to which we send intent to check phone book access permission
     private static final String ACCESS_AUTHORITY_PACKAGE = "com.android.settings";
@@ -258,10 +261,11 @@ public class BluetoothPbapService extends ProfileService implements IObexConnect
                     mSessionStatusHandler.obtainMessage(USER_TIMEOUT).sendToTarget();
                 }
                 // Release all resources
-                closeService();
+                Log.d(TAG, "Adapter turning off, SHUTDOWN..");
+                mSessionStatusHandler.sendMessage(mSessionStatusHandler.obtainMessage(SHUTDOWN));
             } else if (state == BluetoothAdapter.STATE_ON) {
-                // start RFCOMM listener
-                mSessionStatusHandler.sendMessage(mSessionStatusHandler.obtainMessage(START_LISTENER));
+                 mSessionStatusHandler.sendMessage(
+                        mSessionStatusHandler.obtainMessage(START_LISTENER));
             }
             return;
         }
@@ -314,8 +318,8 @@ public class BluetoothPbapService extends ProfileService implements IObexConnect
                 if (intent.getBooleanExtra(BluetoothDevice.EXTRA_ALWAYS_ALLOWED, false)) {
                     boolean result = mRemoteDevice.setPhonebookAccessPermission(
                             BluetoothDevice.ACCESS_REJECTED);
-                    if (VERBOSE) {
-                        Log.v(TAG, "setPhonebookAccessPermission(ACCESS_REJECTED)=" + result);
+                    if (DEBUG) {
+                        Log.d(TAG, "setPhonebookAccessPermission(ACCESS_REJECTED)=" + result);
                     }
                 }
                 stopObexServerSession();
@@ -329,7 +333,7 @@ public class BluetoothPbapService extends ProfileService implements IObexConnect
         } else if (action.equals(AUTH_CANCELLED_ACTION)) {
             notifyAuthCancelled();
         } else {
-            Log.w(TAG, "Unrecognized intent!");
+            if (VERBOSE) Log.w(TAG, "Unrecognized intent!");
             return;
         }
 
@@ -400,15 +404,10 @@ public class BluetoothPbapService extends ProfileService implements IObexConnect
 
     private final synchronized void closeServerSocket() {
         // exit SocketAcceptThread early
-        if (mServerSocket != null) {
-            try {
-                // this will cause mServerSocket.accept() return early with IOException
-                mServerSocket.close();
-                mServerSocket = null;
-            } catch (IOException ex) {
-                Log.e(TAG, "Close Server Socket error: " + ex);
-            }
-        }
+       if (mServerSockets != null) {
+           mServerSockets.shutdown(false);
+           mServerSockets = null;
+       }
     }
 
     private final synchronized void closeConnectionSocket() {
@@ -441,7 +440,8 @@ public class BluetoothPbapService extends ProfileService implements IObexConnect
             mServerSession.close();
             mServerSession = null;
         }
-
+        BluetoothPbapFixes.removeSdpRecord(mAdapter, mSdpHandle, this);
+        mStartError = true;
         closeConnectionSocket();
         closeServerSocket();
         if (mSessionStatusHandler != null) mSessionStatusHandler.removeCallbacksAndMessages(null);
@@ -722,15 +722,15 @@ public class BluetoothPbapService extends ProfileService implements IObexConnect
         setState(state, BluetoothPbap.RESULT_SUCCESS);
     }
 
-    private synchronized void setState(int state, int result) {
+    protected synchronized void setState(int state, int result) {
         if (state != mState) {
             if (DEBUG) Log.d(TAG, "Pbap state " + mState + " -> " + state + ", result = "
                     + result);
             int prevState = mState;
             mState = state;
             Intent intent = new Intent(BluetoothPbap.PBAP_STATE_CHANGED_ACTION);
-            intent.putExtra(BluetoothPbap.PBAP_PREVIOUS_STATE, prevState);
-            intent.putExtra(BluetoothPbap.PBAP_STATE, mState);
+            intent.putExtra(BluetoothProfile.EXTRA_PREVIOUS_STATE, prevState);
+            intent.putExtra(BluetoothProfile.EXTRA_STATE, mState);
             intent.putExtra(BluetoothDevice.EXTRA_DEVICE, mRemoteDevice);
             sendBroadcast(intent, BLUETOOTH_PERM);
         }
@@ -836,7 +836,8 @@ public class BluetoothPbapService extends ProfileService implements IObexConnect
                 Log.e(TAG, "Illegal state exception, content observer is already registered");
             }
         }
-        return true;
+        mStartError = false;
+        return !mStartError;
     }
 
     @Override
@@ -855,6 +856,14 @@ public class BluetoothPbapService extends ProfileService implements IObexConnect
         }
         mSessionStatusHandler.obtainMessage(SHUTDOWN).sendToTarget();
         setState(BluetoothPbap.STATE_DISCONNECTED, BluetoothPbap.RESULT_CANCELED);
+
+        mStartError = true;
+        return true;
+    }
+
+    public boolean cleanup()  {
+        if (DEBUG) Log.d(TAG, "cleanup()");
+        BluetoothPbapFixes.handleCleanup(this, SHUTDOWN);
         return true;
     }
 
@@ -963,12 +972,19 @@ public class BluetoothPbapService extends ProfileService implements IObexConnect
                 Log.d(TAG, "RemoveSDPrecord returns " + status);
                 mSdpHandle = -1;
             }
-            mSdpHandle = SdpManager.getDefaultManager().createPbapPseRecord(
-                    "OBEX Phonebook Access Server", mServerSockets.getRfcommChannel(),
-                    mServerSockets.getL2capPsm(), SDP_PBAP_SERVER_VERSION,
-                    SDP_PBAP_SUPPORTED_REPOSITORIES, SDP_PBAP_SUPPORTED_FEATURES);
-            // fetch Pbap Params to check if significant change has happened to Database
-            BluetoothPbapUtils.fetchPbapParams(mContext);
+
+            BluetoothPbapFixes.getFeatureSupport(mContext);
+            if (!BluetoothPbapFixes.isSupportedPbap12) {
+                BluetoothPbapFixes.createSdpRecord(mServerSockets,
+                        SDP_PBAP_SUPPORTED_REPOSITORIES, this);
+            } else {
+                mSdpHandle = SdpManager.getDefaultManager().createPbapPseRecord(
+                        "OBEX Phonebook Access Server", mServerSockets.getRfcommChannel(),
+                        mServerSockets.getL2capPsm(), SDP_PBAP_SERVER_VERSION,
+                        SDP_PBAP_SUPPORTED_REPOSITORIES, SDP_PBAP_SUPPORTED_FEATURES);
+                // fetch Pbap Params to check if significant change has happened to Database
+                BluetoothPbapUtils.fetchPbapParams(mContext);
+            }
 
             if (DEBUG) Log.d(TAG, "PBAP server with handle:" + mSdpHandle);
         }
@@ -1058,5 +1074,13 @@ public class BluetoothPbapService extends ProfileService implements IObexConnect
         if (!mInterrupted && mAdapter != null && mAdapter.isEnabled()) {
             startSocketListeners();
         }
+    }
+
+    protected boolean isPbapStarted() {
+        return !mStartError;
+    }
+
+    public Handler getHandler() {
+        return mSessionStatusHandler;
     }
 }
