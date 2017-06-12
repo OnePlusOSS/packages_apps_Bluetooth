@@ -72,6 +72,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import android.os.SystemProperties;
+import com.android.bluetooth.hfp.HeadsetService;
 
 /******************************************************************************
  * support Bluetooth AVRCP profile. support metadata, play status, event
@@ -410,6 +412,7 @@ public final class Avrcp {
         IntentFilter bootFilter = new IntentFilter();
         bootFilter.addAction(Intent.ACTION_BOOT_COMPLETED);
         context.registerReceiver(mBootReceiver, bootFilter);
+        pts_test = SystemProperties.getBoolean("bt.avrcpct-passthrough.pts", false);
     }
 
     private synchronized void start() {
@@ -473,6 +476,9 @@ public final class Avrcp {
     public synchronized void doQuit() {
         if (DEBUG) Log.d(TAG, "doQuit");
         if (mMediaController != null) mMediaController.unregisterCallback(mMediaControllerCb);
+        Message msg = mHandler.obtainMessage(MESSAGE_DEVICE_RC_CLEANUP, APP_CLEANUP,
+               0, null);
+        mHandler.sendMessage(msg);
         if (mMediaSessionManager != null) {
             mMediaSessionManager.setCallback(null, null);
             mMediaSessionManager.removeOnActiveSessionsChangedListener(mActiveSessionListener);
@@ -524,6 +530,16 @@ public final class Avrcp {
         @Override
         public synchronized void onPlaybackStateChanged(PlaybackState state) {
             if (DEBUG) Log.v(TAG, "onPlaybackStateChanged: state " + state.toString());
+            int newPlayStatus = state.getState();
+            List<BluetoothDevice> mConnectedDevices = mA2dpService.getConnectedDevices();
+            if (!mConnectedDevices.isEmpty()) {
+                if (mA2dpService.isA2dpPlaying(mConnectedDevices.get(0))&&
+                                      (newPlayStatus == PlaybackState.STATE_PAUSED))
+                {
+                    Log.w(TAG," Do not update to Carkit");
+                    return;
+                }
+            }
             scheduleMediaUpdate();
         }
 
@@ -1103,7 +1119,11 @@ public final class Avrcp {
                 if (DEBUG)
                     Log.v(TAG, "MSG_NATIVE_REQ_PASS_THROUGH: id=" + msg.arg1 + " st=" + msg.arg2);
                 // argument 1 is id, argument 2 is keyState
-                handlePassthroughCmd(msg.arg1, msg.arg2);
+                Bundle data = msg.getData();
+                byte[] bdaddr = data.getByteArray("BdAddress");
+                String address = Utils.getAddressStringFromByte(bdaddr);
+                Log.v(TAG, "MSG_NATIVE_REQ_PASS_THROUGH " + address);
+                handlePassthroughCmd(bdaddr, msg.arg1, msg.arg2);
                 break;
 
             case MSG_UPDATE_MEDIA:
@@ -1305,9 +1325,15 @@ public final class Avrcp {
             if (!exists)
                 return;
 
+            String CurrentPackageName = (mMediaController != null) ? mMediaController.getPackageName():null;
             artistName = stringOrBlank(data.getString(MediaMetadata.METADATA_KEY_ARTIST));
             albumName = stringOrBlank(data.getString(MediaMetadata.METADATA_KEY_ALBUM));
-            mediaNumber = longStringOrBlank(data.getLong(MediaMetadata.METADATA_KEY_TRACK_NUMBER));
+            if (CurrentPackageName != null && !(CurrentPackageName.equals("com.android.music"))) {
+                mediaNumber = longStringOrBlank((data.getLong(MediaMetadata.METADATA_KEY_TRACK_NUMBER)));
+            } else {
+                /* playlist starts with 0 for default player*/
+                mediaNumber = longStringOrBlank((data.getLong(MediaMetadata.METADATA_KEY_TRACK_NUMBER) + 1L));
+            }
             mediaTotalNumber = longStringOrBlank(data.getLong(MediaMetadata.METADATA_KEY_NUM_TRACKS));
             genre = stringOrBlank(data.getString(MediaMetadata.METADATA_KEY_GENRE));
             playingTimeMs = data.getLong(MediaMetadata.METADATA_KEY_DURATION);
@@ -1366,9 +1392,15 @@ public final class Avrcp {
                 case ATTR_ALBUM_NAME:
                     return albumName;
                 case ATTR_MEDIA_NUMBER:
-                    return mediaNumber;
+                    if(mediaNumber.equals("0"))
+                        return new String();
+                    else
+                        return mediaNumber;
                 case ATTR_MEDIA_TOTAL_NUMBER:
-                    return mediaTotalNumber;
+                    if(mediaTotalNumber.equals("0"))
+                        return new String();
+                    else
+                        return mediaTotalNumber;
                 case ATTR_GENRE:
                     return genre;
                 case ATTR_PLAYING_TIME_MS:
@@ -1595,9 +1627,14 @@ public final class Avrcp {
                 if (param <= 0)
                    param = 1;
 
+                int update_interval = SystemProperties.getInt("persist.bt.avrcp.pos_time", 3000);
                 deviceFeatures[deviceIndex].mPlayPosChangedNT =
                                              AvrcpConstants.NOTIFICATION_TYPE_INTERIM;
-                deviceFeatures[deviceIndex].mPlaybackIntervalMs = (long)param * 1000L;
+                if (update_interval == 0) {
+                    deviceFeatures[deviceIndex].mPlaybackIntervalMs = (long)param * 1000L;
+                } else {
+                    deviceFeatures[deviceIndex].mPlaybackIntervalMs = update_interval;
+                }
                 sendPlayPosNotificationRsp(true, deviceIndex);
                 Log.v(TAG,"mPlayPosChangedNT updated for index " +
                       deviceFeatures[deviceIndex].mPlayPosChangedNT +
@@ -1645,6 +1682,9 @@ public final class Avrcp {
 
     private void handlePassthroughCmdRequestFromNative(byte[] address, int id, int keyState) {
         Message msg = mHandler.obtainMessage(MSG_NATIVE_REQ_PASS_THROUGH, id, keyState);
+        Bundle data = new Bundle();
+        data.putByteArray("BdAddress" , address);
+        msg.setData(data);
         mHandler.sendMessage(msg);
     }
 
@@ -1721,16 +1761,17 @@ public final class Avrcp {
         int playStatus = PLAYSTATUS_ERROR;
         switch (state.getState()) {
             case PlaybackState.STATE_PLAYING:
-            case PlaybackState.STATE_BUFFERING:
                 playStatus = PLAYSTATUS_PLAYING;
                 break;
 
             case PlaybackState.STATE_STOPPED:
+            case PlaybackState.STATE_CONNECTING:
             case PlaybackState.STATE_NONE:
                 playStatus = PLAYSTATUS_STOPPED;
                 break;
 
             case PlaybackState.STATE_PAUSED:
+            case PlaybackState.STATE_BUFFERING:
                 playStatus = PLAYSTATUS_PAUSED;
                 break;
 
@@ -1755,8 +1796,7 @@ public final class Avrcp {
 
     private boolean isPlayingState(@Nullable PlaybackState state) {
         if (state == null) return false;
-        return (state != null) && (state.getState() == PlaybackState.STATE_PLAYING)
-                || (state.getState() == PlaybackState.STATE_BUFFERING);
+        return (state != null) && (state.getState() == PlaybackState.STATE_PLAYING);
     }
 
     /**
@@ -2119,6 +2159,12 @@ public final class Avrcp {
                     deviceFeatures[i].isActiveDevice) {
                     deviceFeatures[i].isActiveDevice = false;
                     Log.i(TAG,"Active device set to false at index =  " + i);
+                    if (isPlayingState(deviceFeatures[i].mCurrentPlayState)) {
+                        PlaybackState.Builder playState = new PlaybackState.Builder();
+                        playState.setState(PlaybackState.STATE_PAUSED,
+                                       PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1.0f);
+                        updatePlaybackState(playState.build(), deviceFeatures[i].mCurrentDevice);
+                    }
                 }
             }
             else if (deviceFeatures[i].mCurrentDevice != null &&
@@ -2376,6 +2422,13 @@ public final class Avrcp {
                 @Override
                 public void onActiveSessionsChanged(
                         List<android.media.session.MediaController> newControllers) {
+                    if (newControllers.size() > 0) {
+                        HeadsetService mService = HeadsetService.getHeadsetService();
+                        if (mService != null && mService.isInCall()) {
+                            Log.d(TAG, "Ignoring session changed update because of MT call in progress");
+                            return;
+                        }
+                    }
                     // Update the current players
                     for (android.media.session.MediaController controller : newControllers) {
                         addMediaPlayerController(controller);
@@ -3427,18 +3480,58 @@ public final class Avrcp {
 
     /* PASSTHROUGH COMMAND MANAGEMENT */
 
-    void handlePassthroughCmd(int op, int state) {
+    void handlePassthroughCmd(byte[] bdaddr, int op, int state) {
         int code = avrcpPassthroughToKeyCode(op);
         if (code == KeyEvent.KEYCODE_UNKNOWN) {
             Log.w(TAG, "Ignoring passthrough of unknown key " + op + " state " + state);
             return;
         }
+        BluetoothDevice device;
+        String address = Utils.getAddressStringFromByte(bdaddr);
+        device = mAdapter.getRemoteDevice(address);
+        int deviceIndex = getIndexForDevice(device);
+        if (deviceIndex == INVALID_DEVICE_INDEX) {
+            Log.e(TAG,"Invalid device index for play status");
+            return;
+        }
+
         int action = KeyEvent.ACTION_DOWN;
         if (state == AvrcpConstants.KEY_STATE_RELEASE) action = KeyEvent.ACTION_UP;
         KeyEvent event = new KeyEvent(action, code);
         if (!KeyEvent.isMediaKey(code)) {
             Log.w(TAG, "Passthrough non-media key " + op + " (code " + code + ") state " + state);
+        } else {
+            if (code == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) {
+                if (action == KeyEvent.ACTION_DOWN) {
+                    mFastforward = true;
+                } else if (action == KeyEvent.ACTION_UP) {
+                    mFastforward = false;
+                }
+            } else if (code == KeyEvent.KEYCODE_MEDIA_REWIND) {
+                if (action == KeyEvent.ACTION_DOWN) {
+                    mRewind = true;
+                } else if (action == KeyEvent.ACTION_UP) {
+                    mRewind = false;
+                }
+            } else {
+                mFastforward = false;
+                mRewind = false;
+            }
         }
+
+        /* IOT Fix as some remote recognise FF/Rewind state as non-playing hence send
+         * changed response at the time of Release of Fast-Forward/Rewind Button */
+        if ((code == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD || code == KeyEvent.KEYCODE_MEDIA_REWIND)
+                && (mPlayStatusChangedNT == AvrcpConstants.NOTIFICATION_TYPE_INTERIM) &&
+                (action == KeyEvent.ACTION_UP)) {
+            deviceFeatures[deviceIndex].mPlayStatusChangedNT =
+                    AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
+            registerNotificationRspPlayStatusNative(deviceFeatures[deviceIndex].mPlayStatusChangedNT
+                    ,convertPlayStateToPlayStatus(deviceFeatures[deviceIndex].mCurrentPlayState),
+                    getByteAddress(deviceFeatures[deviceIndex].mCurrentDevice));
+            Log.d(TAG, "Sending playback status CHANGED rsp on FF/Rewind key release");
+        }
+
         mMediaSessionManager.dispatchMediaKeyEvent(event);
         addKeyPending(event);
     }

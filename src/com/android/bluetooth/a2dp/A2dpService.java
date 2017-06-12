@@ -341,7 +341,7 @@ public class A2dpService extends ProfileService {
         }
     }
 
-    synchronized boolean isA2dpPlaying(BluetoothDevice device) {
+    public synchronized boolean isA2dpPlaying(BluetoothDevice device) {
         enforceCallingOrSelfPermission(BLUETOOTH_PERM,
                                        "Need BLUETOOTH permission");
         if (DBG) Log.d(TAG, "isA2dpPlaying(" + device + ")");
