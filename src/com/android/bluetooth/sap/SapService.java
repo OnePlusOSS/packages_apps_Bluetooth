@@ -338,7 +338,7 @@ public class SapService extends ProfileService {
                     }
                     int permission = mRemoteDevice.getSimAccessPermission();
 
-                    if (VERBOSE) Log.v(TAG, "getSimAccessPermission() = " + permission);
+                    if (DEBUG) Log.d(TAG, "getSimAccessPermission() = " + permission);
 
                     if (permission == BluetoothDevice.ACCESS_ALLOWED) {
                         try {
@@ -356,12 +356,12 @@ public class SapService extends ProfileService {
                                         BluetoothDevice.REQUEST_TYPE_SIM_ACCESS);
                         intent.putExtra(BluetoothDevice.EXTRA_DEVICE, mRemoteDevice);
                         intent.putExtra(BluetoothDevice.EXTRA_PACKAGE_NAME, getPackageName());
-
+                        intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
                         mIsWaitingAuthorization = true;
                         setUserTimeoutAlarm();
-                        sendBroadcast(intent, BLUETOOTH_ADMIN_PERM);
+                        sendOrderedBroadcast(intent, BLUETOOTH_ADMIN_PERM);
 
-                        if (VERBOSE) Log.v(TAG, "waiting for authorization for connection from: "
+                        if (DEBUG) Log.d(TAG, "waiting for authorization for connection from: "
                                 + sRemoteDeviceName);
 
                     } else {
@@ -640,6 +640,7 @@ public class SapService extends ProfileService {
         intent.putExtra(BluetoothDevice.EXTRA_DEVICE, device);
         intent.putExtra(BluetoothDevice.EXTRA_ACCESS_REQUEST_TYPE,
                         BluetoothDevice.REQUEST_TYPE_SIM_ACCESS);
+        intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
         sendBroadcast(intent, BLUETOOTH_PERM);
     }
 
@@ -649,6 +650,7 @@ public class SapService extends ProfileService {
         if (mRemoveTimeoutMsg) {
             Intent timeoutIntent =
                     new Intent(USER_CONFIRM_TIMEOUT_ACTION);
+            timeoutIntent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
             sendBroadcast(timeoutIntent, BLUETOOTH_PERM);
             mIsWaitingAuthorization = false;
             cancelUserTimeoutAlarm();
