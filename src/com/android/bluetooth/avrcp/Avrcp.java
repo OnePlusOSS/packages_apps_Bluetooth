@@ -446,7 +446,9 @@ public final class Avrcp {
 
     public void doQuit() {
         if (DEBUG) Log.d(TAG, "doQuit");
-        if (mMediaController != null) mMediaController.unregisterCallback(mMediaControllerCb);
+        synchronized (this) {
+            if (mMediaController != null) mMediaController.unregisterCallback(mMediaControllerCb);
+        }
         if (mMediaSessionManager != null) {
             mMediaSessionManager.setCallback(null, null);
             mMediaSessionManager.removeOnActiveSessionsChangedListener(mActiveSessionListener);
@@ -516,8 +518,9 @@ public final class Avrcp {
         @Override
         public void onSessionDestroyed() {
             Log.v(TAG, "MediaController session destroyed");
-            if (mMediaController != null) {
-                removeMediaController(mMediaController.getWrappedInstance());
+            synchronized (Avrcp.this) {
+                if (mMediaController != null)
+                    removeMediaController(mMediaController.getWrappedInstance());
             }
         }
 
@@ -1625,6 +1628,10 @@ public final class Avrcp {
     private void sendTrackChangedRsp(boolean requested, BluetoothDevice device) {
         int deviceIndex = getIndexForDevice(device);
         MediaPlayerInfo info = getAddressedPlayerInfo();
+        if (!requested && mTrackChangedNT != AvrcpConstants.NOTIFICATION_TYPE_INTERIM) {
+            if (DEBUG) Log.d(TAG, "sendTrackChangedRsp: Not registered or requesting.");
+            return;
+        }
         if (info != null && !info.isBrowseSupported()) {
             // for players which does not support Browse or when no track is currently selected
             trackChangeRspForBrowseUnsupported(requested, device);
@@ -2906,8 +2913,8 @@ public final class Avrcp {
 
         if (DEBUG)
             Log.d(TAG, "updateCurrentController: " + mMediaController + " to " + newController);
-        if (mMediaController == null || (!mMediaController.equals(newController))) {
-            synchronized (this) {
+        synchronized (this) {
+            if (mMediaController == null || (!mMediaController.equals(newController))) {
                 if (mMediaController != null) {
                     mMediaController.unregisterCallback(mMediaControllerCb);
                 }
@@ -3140,14 +3147,15 @@ public final class Avrcp {
             ProfileService.println(sb, "mVolCmdSetInProgress: " + deviceFeatures[i].mVolCmdSetInProgress);
             ProfileService.println(sb, "mVolCmdAdjustInProgress: " + deviceFeatures[i].mVolCmdAdjustInProgress);
             ProfileService.println(sb, "mAbsVolRetryTimes: " + deviceFeatures[i].mAbsVolRetryTimes);
-            ProfileService.println(sb, "mAudioStreamMax: " + mAudioStreamMax);
             ProfileService.println(sb, "mVolumeMapping: " + deviceFeatures[i].mVolumeMapping.toString());
 
         }
-        if (mMediaController != null)
-            ProfileService.println(sb, "mMediaController: " + mMediaController.getWrappedInstance()
-                            + " pkg " + mMediaController.getPackageName());
-
+        synchronized (this) {
+            if (mMediaController != null)
+                ProfileService.println(sb, "mMediaController: "
+                                + mMediaController.getWrappedInstance() + " pkg "
+                                + mMediaController.getPackageName());
+        }
         ProfileService.println(sb, "");
         ProfileService.println(sb, "Media Players:");
         synchronized (mMediaPlayerInfoList) {
