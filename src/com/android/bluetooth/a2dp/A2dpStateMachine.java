@@ -334,6 +334,11 @@ final class A2dpStateMachine extends StateMachine {
         public void enter() {
             log("Enter Disconnected: " + getCurrentMessage().what);
             log("mConnectedDevicesList size: " + mConnectedDevicesList.size());
+            if (mCurrentDevice != null || mTargetDevice != null || mIncomingDevice != null) {
+                loge("ERROR: enter() inconsistent state in Disconnected: current = "
+                        + mCurrentDevice + " target = " + mTargetDevice + " incoming = "
+                        + mIncomingDevice);
+            }
             // Remove Timeout msg when moved to stable state
             removeMessages(CONNECT_TIMEOUT);
             mCurrentDevice = null;
@@ -460,6 +465,10 @@ final class A2dpStateMachine extends StateMachine {
         @Override
         public void enter() {
             log("Enter Pending: " + getCurrentMessage().what);
+            if (mTargetDevice != null && mIncomingDevice != null) {
+                loge("ERROR: enter() inconsistent state in Pending: current = " + mCurrentDevice
+                        + " target = " + mTargetDevice + " incoming = " + mIncomingDevice);
+            }
         }
 
         @Override
@@ -780,6 +789,8 @@ final class A2dpStateMachine extends StateMachine {
             if (getDeviceForMessage(CONNECT_TIMEOUT) == null) {
                 removeMessages(CONNECT_TIMEOUT);
             }
+            removeDeferredMessages(CONNECT);
+
             // Upon connected, the audio starts out as stopped
             broadcastAudioState(mCurrentDevice, BluetoothA2dp.STATE_NOT_PLAYING,
                                 BluetoothA2dp.STATE_PLAYING);
@@ -870,11 +881,13 @@ final class A2dpStateMachine extends StateMachine {
                                 BluetoothProfile.STATE_DISCONNECTING);
                         break;
                     }
-                    if (mConnectedDevicesList.size() > 1) {
-                        mMultiDisconnectDevice = device;
-                        transitionTo(mMultiConnectionPending);
-                    } else {
-                        transitionTo(mPending);
+                    synchronized (A2dpStateMachine.this) {
+                        if (mConnectedDevicesList.size() > 1) {
+                            mMultiDisconnectDevice = device;
+                            transitionTo(mMultiConnectionPending);
+                        } else {
+                            transitionTo(mPending);
+                        }
                     }
                 }
                     break;
