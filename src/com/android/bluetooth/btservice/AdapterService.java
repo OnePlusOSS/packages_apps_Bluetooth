@@ -1,4 +1,8 @@
 /*
+ * Copyright (C) 2017, The Linux Foundation. All rights reserved.
+ * Not a Contribution.
+ */
+/*
  * Copyright (C) 2012 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -96,6 +100,7 @@ public class AdapterService extends Service {
     //For Debugging only
     private static int sRefCount = 0;
     private long mBluetoothStartTime = 0;
+    private static int mScanmode;
 
     private final Object mEnergyInfoLock = new Object();
     private int mStackReportedState;
@@ -213,6 +218,7 @@ public class AdapterService extends Service {
         if (TRACE_REF) {
             synchronized (AdapterService.class) {
                 sRefCount++;
+                mScanmode = BluetoothAdapter.SCAN_MODE_CONNECTABLE;
                 debugLog("AdapterService() - REFCOUNT: CREATED. INSTANCE_COUNT" + sRefCount);
             }
         }
@@ -259,8 +265,6 @@ public class AdapterService extends Service {
                 doUpdate=true;
             }
         }
-        debugLog("processProfileServiceStateChanged() serviceName=" + serviceName
-            + ", state=" + state +", doUpdate=" + doUpdate);
 
         if (!doUpdate) {
             return;
@@ -299,11 +303,8 @@ public class AdapterService extends Service {
                 Iterator<Map.Entry<String,Integer>> i = mProfileServicesState.entrySet().iterator();
                 while (i.hasNext()) {
                     Map.Entry<String,Integer> entry = i.next();
-                    debugLog("Service: " + entry.getKey());
-                    if (entry.getKey().equals("com.android.bluetooth.gatt.GattService")) {
-                        debugLog("Skip GATT service - already started before");
-                        continue;
-                    }
+                    if (entry.getKey().equals("com.android.bluetooth.gatt.GattService")) continue;
+
                     if (BluetoothAdapter.STATE_OFF != entry.getValue()) {
                         debugLog("onProfileServiceStateChange() - Profile still running: "
                             + entry.getKey());
@@ -325,11 +326,8 @@ public class AdapterService extends Service {
                 Iterator<Map.Entry<String,Integer>> i = mProfileServicesState.entrySet().iterator();
                 while (i.hasNext()) {
                     Map.Entry<String,Integer> entry = i.next();
-                    debugLog("Service: " + entry.getKey());
-                    if (entry.getKey().equals("com.android.bluetooth.gatt.GattService")) {
-                        debugLog("Skip GATT service - already started before");
-                        continue;
-                    }
+                    if (entry.getKey().equals("com.android.bluetooth.gatt.GattService")) continue;
+
                     if (BluetoothAdapter.STATE_ON != entry.getValue()) {
                         debugLog("onProfileServiceStateChange() - Profile still not running:"
                             + entry.getKey());
@@ -896,9 +894,22 @@ public class AdapterService extends Service {
                 return false;
             }
 
+            //do not allow setmode when multicast is active
+            A2dpService a2dpService = A2dpService.getA2dpService();
+            if (a2dpService != null &&
+                    a2dpService.isMulticastOngoing(null)) {
+                Log.e(TAG,"A2dp Multicast is Ongoing, ignore setmode " + mode);
+                mScanmode = mode;
+                return false;
+            }
+
             AdapterService service = getService();
             if (service == null) return false;
-            return service.setScanMode(mode,duration);
+            // when scan mode is not changed during multicast, reset it last to
+            // scan mode, as we will set mode to none for multicast
+            mScanmode = service.getScanMode();
+            Log.i(TAG,"setScanMode: prev mode: " + mScanmode + " new mode: " + mode);
+            return service.setScanMode(mode, duration);
         }
 
         public int getDiscoverableTimeout() {
@@ -1514,7 +1525,6 @@ public class AdapterService extends Service {
         enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
 
         setDiscoverableTimeout(duration);
-
         int newMode = convertScanModeToHal(mode);
         return mAdapterProperties.setScanMode(newMode);
     }
@@ -1534,6 +1544,13 @@ public class AdapterService extends Service {
      boolean startDiscovery() {
         enforceCallingOrSelfPermission(BLUETOOTH_ADMIN_PERM,
                                        "Need BLUETOOTH ADMIN permission");
+        //do not allow new connections with active multicast
+        A2dpService a2dpService = A2dpService.getA2dpService();
+        if (a2dpService != null &&
+                a2dpService.isMulticastOngoing(null)) {
+            Log.i(TAG,"A2dp Multicast is Ongoing, ignore discovery");
+            return false;
+        }
 
         return startDiscoveryNative();
     }
@@ -1587,6 +1604,13 @@ public class AdapterService extends Service {
             "Need BLUETOOTH ADMIN permission");
         DeviceProperties deviceProp = mRemoteDevices.getDeviceProperties(device);
         if (deviceProp != null && deviceProp.getBondState() != BluetoothDevice.BOND_NONE) {
+            return false;
+        }
+        // Multicast: Do not allow bonding while multcast
+        A2dpService a2dpService = A2dpService.getA2dpService();
+        if (a2dpService != null &&
+                a2dpService.isMulticastOngoing(null)) {
+            Log.e(TAG,"A2dp Multicast is ongoing, ignore bonding");
             return false;
         }
 
@@ -2263,6 +2287,13 @@ public class AdapterService extends Service {
         } catch (IOException e) {
             errorLog("Unable to write Java protobuf to file descriptor.");
         }
+    }
+
+    // do not use this API.It is called only from A2spstatemachine for
+    // restoring SCAN mode after multicast is stopped
+    public boolean restoreScanMode() {
+        Log.i(TAG, "restoreScanMode: " + mScanmode);
+        return setScanMode(mScanmode, getDiscoverableTimeout());
     }
 
     private void debugLog(String msg) {

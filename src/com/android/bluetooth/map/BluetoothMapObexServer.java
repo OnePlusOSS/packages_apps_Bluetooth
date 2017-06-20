@@ -618,6 +618,12 @@ public class BluetoothMapObexServer extends ServerRequestHandler {
             if(D) Log.d(TAG, "pushMessage: charset" + appParams.getCharset()+ "folderId: "
                     + folderElement.getFolderId() + "Name: " + folderName +"TYPE: "
                     + message.getType());
+
+            /* Auto correct network type in SMS to Phone type (GSM/CDMA)
+             * CASE 1: GSM to CDMA if phone type is CDMA
+             * CASE 2: CDMA to GSM if Phone type is GSM */
+            BluetoothMapFixes.autoCorrectMsgtype(mContext, message);
+
             // Send message
             if (mObserver == null || message == null) {
                 // Should not happen except at shutdown.

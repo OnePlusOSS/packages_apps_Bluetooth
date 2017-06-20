@@ -1,4 +1,7 @@
 /*
+ * Copyright (C) 2017, The Linux Foundation. All rights reserved.
+ */
+/*
  * Copyright (c) 2008-2009, Motorola, Inc.
  *
  * All rights reserved.
@@ -56,6 +59,8 @@ import android.os.Process;
 import android.util.Log;
 import android.os.ParcelUuid;
 import android.bluetooth.SdpOppOpsRecord;
+
+import com.android.bluetooth.a2dp.A2dpService;
 
 import java.io.File;
 import java.io.IOException;
@@ -161,6 +166,7 @@ public class BluetoothOppTransfer implements BluetoothOppBatch.BluetoothOppBatch
                             intent.getParcelableExtra(BluetoothDevice.EXTRA_SDP_RECORD);
                     if (record == null) {
                         Log.w(TAG, " Invalid SDP , ignoring !!");
+                        markConnectionFailed(null);
                         return;
                     }
                     mConnectThread =
@@ -709,6 +715,15 @@ public class BluetoothOppTransfer implements BluetoothOppBatch.BluetoothOppBatch
         @Override
         public void run() {
             timestamp = System.currentTimeMillis();
+
+            //do not allow new connections with active multicast
+            A2dpService a2dpService = A2dpService.getA2dpService();
+            if (a2dpService != null &&
+                    a2dpService.isMulticastOngoing(device)) {
+                Log.i(TAG,"A2dp Multicast is Ongoing, ignore OPP send");
+                return ;
+            }
+
             if (D) Log.d(TAG, "sdp initiated = " + mSdpInitiated + " l2cChannel :" + l2cChannel);
             // check if sdp initiated successfully for l2cap or not. If not
             // connect
@@ -758,20 +773,20 @@ public class BluetoothOppTransfer implements BluetoothOppBatch.BluetoothOppBatch
                 return;
             }
         }
-
-        private void markConnectionFailed(BluetoothSocket s) {
-            if (V) Log.v(TAG, "markConnectionFailed " + s);
-            try {
-                if (s != null) {
-                    s.close();
-                }
-            } catch (IOException e) {
-                if (V) Log.e(TAG, "Error when close socket");
-            }
-            mSessionHandler.obtainMessage(TRANSPORT_ERROR).sendToTarget();
-            return;
-        }
     };
+
+    private void markConnectionFailed(BluetoothSocket s) {
+        if (V) Log.v(TAG, "markConnectionFailed " + s);
+        try {
+            if (s != null) {
+                s.close();
+            }
+        } catch (IOException e) {
+            if (V) Log.e(TAG, "Error when close socket");
+        }
+        mSessionHandler.obtainMessage(TRANSPORT_ERROR).sendToTarget();
+        return;
+    }
 
     /* update a trivial field of a share to notify Provider the batch status change */
     private void tickShareStatus(BluetoothOppShareInfo share) {

@@ -2,8 +2,10 @@ package com.android.bluetooth.sap;
 
 import android.app.AlarmManager;
 import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothSap;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -84,6 +86,7 @@ public class SapServer extends Thread implements Callback {
     public static final String SAP_DISCONNECT_TYPE_EXTRA =
             "com.android.bluetooth.sap.extra.DISCONNECT_TYPE";
     public static final int NOTIFICATION_ID = android.R.drawable.stat_sys_data_bluetooth;
+    private static final String SAP_NOTIFICATION_CHANNEL = "sap_notification_channel";
     public static final int ISAP_GET_SERVICE_DELAY_MILLIS = 3 * 1000;
     private static final int DISCONNECT_TIMEOUT_IMMEDIATE = 5000; /* ms */
     private static final int DISCONNECT_TIMEOUT_RFCOMM = 2000; /* ms */
@@ -208,6 +211,12 @@ public class SapServer extends Thread implements Callback {
     {
         String title, text, button, ticker;
         Notification notification;
+        NotificationManager notificationManager =
+                (NotificationManager) mContext.getSystemService(Context.NOTIFICATION_SERVICE);
+        NotificationChannel notificationChannel = new NotificationChannel(SAP_NOTIFICATION_CHANNEL,
+                mContext.getString(R.string.bluetooth_sap_notif_title),
+                NotificationManager.IMPORTANCE_HIGH);
+        notificationManager.createNotificationChannel(notificationChannel);
         if(VERBOSE) Log.i(TAG, "setNotification type: " + type);
         /* For PTS TC_SERVER_DCN_BV_03_I we need to expose the option to send immediate disconnect
          * without first sending a graceful disconnect.
@@ -218,34 +227,34 @@ public class SapServer extends Thread implements Callback {
 
         /* put notification up for the user to be able to disconnect from the client*/
         Intent sapDisconnectIntent = new Intent(SapServer.SAP_DISCONNECT_ACTION);
-        if(type == SapMessage.DISC_GRACEFULL){
+        if (type == SapMessage.DISC_GRACEFULL) {
             title = mContext.getString(R.string.bluetooth_sap_notif_title);
             button = mContext.getString(R.string.bluetooth_sap_notif_disconnect_button);
             text = mContext.getString(R.string.bluetooth_sap_notif_message);
             ticker = mContext.getString(R.string.bluetooth_sap_notif_ticker);
-        }else{
+        } else {
             title = mContext.getString(R.string.bluetooth_sap_notif_title);
             button = mContext.getString(R.string.bluetooth_sap_notif_force_disconnect_button);
             text = mContext.getString(R.string.bluetooth_sap_notif_disconnecting);
             ticker = mContext.getString(R.string.bluetooth_sap_notif_ticker);
         }
-        if(!pts_test)
-        {
+        if (!pts_test) {
             sapDisconnectIntent.putExtra(SapServer.SAP_DISCONNECT_TYPE_EXTRA, type);
             PendingIntent pIntentDisconnect = PendingIntent.getBroadcast(mContext, type,
                     sapDisconnectIntent,flags);
-            notification = new Notification.Builder(mContext).setOngoing(true)
-                .addAction(android.R.drawable.stat_sys_data_bluetooth, button, pIntentDisconnect)
-                .setContentTitle(title)
-                .setTicker(ticker)
-                .setContentText(text)
-                .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
-                .setAutoCancel(false)
-                .setPriority(Notification.PRIORITY_MAX)
-                .setOnlyAlertOnce(true)
-                .build();
-        }else{
-
+            notification = new Notification.Builder(mContext, SAP_NOTIFICATION_CHANNEL)
+                                   .setOngoing(true)
+                                   .addAction(android.R.drawable.stat_sys_data_bluetooth, button,
+                                           pIntentDisconnect)
+                                   .setContentTitle(title)
+                                   .setTicker(ticker)
+                                   .setContentText(text)
+                                   .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+                                   .setAutoCancel(false)
+                                   .setPriority(Notification.PRIORITY_MAX)
+                                   .setOnlyAlertOnce(true)
+                                   .build();
+        } else {
             sapDisconnectIntent.putExtra(SapServer.SAP_DISCONNECT_TYPE_EXTRA,
                     SapMessage.DISC_GRACEFULL);
             Intent sapForceDisconnectIntent = new Intent(SapServer.SAP_DISCONNECT_ACTION);
@@ -255,28 +264,29 @@ public class SapServer extends Thread implements Callback {
                     SapMessage.DISC_GRACEFULL, sapDisconnectIntent,flags);
             PendingIntent pIntentForceDisconnect = PendingIntent.getBroadcast(mContext,
                     SapMessage.DISC_IMMEDIATE, sapForceDisconnectIntent,flags);
-            notification = new Notification.Builder(mContext).setOngoing(true)
-                    .addAction(android.R.drawable.stat_sys_data_bluetooth,
-                            mContext.getString(R.string.bluetooth_sap_notif_disconnect_button),
-                            pIntentDisconnect)
-                    .addAction(android.R.drawable.stat_sys_data_bluetooth,
-                            mContext.getString(R.string.bluetooth_sap_notif_force_disconnect_button),
-                            pIntentForceDisconnect)
-                    .setContentTitle(title)
-                    .setTicker(ticker)
-                    .setContentText(text)
-                    .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
-                    .setAutoCancel(false)
-                    .setPriority(Notification.PRIORITY_MAX)
-                    .setOnlyAlertOnce(true)
-                    .build();
+            notification =
+                    new Notification.Builder(mContext, SAP_NOTIFICATION_CHANNEL)
+                            .setOngoing(true)
+                            .addAction(android.R.drawable.stat_sys_data_bluetooth,
+                                    mContext.getString(
+                                            R.string.bluetooth_sap_notif_disconnect_button),
+                                    pIntentDisconnect)
+                            .addAction(android.R.drawable.stat_sys_data_bluetooth,
+                                    mContext.getString(
+                                            R.string.bluetooth_sap_notif_force_disconnect_button),
+                                    pIntentForceDisconnect)
+                            .setContentTitle(title)
+                            .setTicker(ticker)
+                            .setContentText(text)
+                            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+                            .setAutoCancel(false)
+                            .setPriority(Notification.PRIORITY_MAX)
+                            .setOnlyAlertOnce(true)
+                            .build();
         }
 
         // cannot be set with the builder
         notification.flags |= Notification.FLAG_NO_CLEAR |Notification.FLAG_ONLY_ALERT_ONCE;
-
-        NotificationManager notificationManager =
-                (NotificationManager) mContext.getSystemService(Context.NOTIFICATION_SERVICE);
 
         notificationManager.notify(NOTIFICATION_ID, notification);
     }
@@ -413,6 +423,7 @@ public class SapServer extends Thread implements Callback {
             /* This is expected during shutdown */
             Log.i(TAG, "IOException received, this is probably a shutdown signal, cleaning up...");
         } catch (Exception e) {
+            releaseThread();
             /* TODO: Change to the needed Exception types when done testing */
             Log.w(TAG, e);
         } finally {
@@ -907,6 +918,15 @@ public class SapServer extends Thread implements Callback {
             return "SAP_MSG_RIL_IND";
         default:
             return "Unknown message ID";
+        }
+    }
+
+    private void releaseThread() {
+        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+        int state = (adapter != null) ? adapter.getState() : -1;
+        if (DEBUG) Log.d(TAG, "BT State :" + state);
+        if (state != BluetoothAdapter.STATE_ON) {
+            mDeinitSignal.countDown();
         }
     }
 

@@ -41,9 +41,10 @@ public class SapService extends ProfileService {
 
     private static final String SDP_SAP_SERVICE_NAME = "SIM Access";
     private static final int SDP_SAP_VERSION = 0x0102;
+    private static final String LOG_TAG = "BluetoothSap";
     private static final String TAG = "SapService";
-    public static final boolean DEBUG = false;
-    public static final boolean VERBOSE = false;
+    public static final boolean DEBUG = true;
+    public static final boolean VERBOSE = Log.isLoggable(LOG_TAG, Log.VERBOSE);
 
     /* Message ID's */
     private static final int START_LISTENER = 1;
@@ -337,7 +338,7 @@ public class SapService extends ProfileService {
                     }
                     int permission = mRemoteDevice.getSimAccessPermission();
 
-                    if (VERBOSE) Log.v(TAG, "getSimAccessPermission() = " + permission);
+                    if (DEBUG) Log.d(TAG, "getSimAccessPermission() = " + permission);
 
                     if (permission == BluetoothDevice.ACCESS_ALLOWED) {
                         try {
@@ -355,12 +356,12 @@ public class SapService extends ProfileService {
                                         BluetoothDevice.REQUEST_TYPE_SIM_ACCESS);
                         intent.putExtra(BluetoothDevice.EXTRA_DEVICE, mRemoteDevice);
                         intent.putExtra(BluetoothDevice.EXTRA_PACKAGE_NAME, getPackageName());
-
+                        intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
                         mIsWaitingAuthorization = true;
                         setUserTimeoutAlarm();
-                        sendBroadcast(intent, BLUETOOTH_ADMIN_PERM);
+                        sendOrderedBroadcast(intent, BLUETOOTH_ADMIN_PERM);
 
-                        if (VERBOSE) Log.v(TAG, "waiting for authorization for connection from: "
+                        if (DEBUG) Log.d(TAG, "waiting for authorization for connection from: "
                                 + sRemoteDeviceName);
 
                     } else {
@@ -639,6 +640,7 @@ public class SapService extends ProfileService {
         intent.putExtra(BluetoothDevice.EXTRA_DEVICE, device);
         intent.putExtra(BluetoothDevice.EXTRA_ACCESS_REQUEST_TYPE,
                         BluetoothDevice.REQUEST_TYPE_SIM_ACCESS);
+        intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
         sendBroadcast(intent, BLUETOOTH_PERM);
     }
 
@@ -648,6 +650,7 @@ public class SapService extends ProfileService {
         if (mRemoveTimeoutMsg) {
             Intent timeoutIntent =
                     new Intent(USER_CONFIRM_TIMEOUT_ACTION);
+            timeoutIntent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
             sendBroadcast(timeoutIntent, BLUETOOTH_PERM);
             mIsWaitingAuthorization = false;
             cancelUserTimeoutAlarm();

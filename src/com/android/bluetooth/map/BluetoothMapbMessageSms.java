@@ -77,6 +77,10 @@ public class BluetoothMapbMessageSms extends BluetoothMapbMessage {
          */
         if(mSmsBody != null) {
             String tmpBody = mSmsBody.replaceAll("END:MSG", "/END\\:MSG"); // Replace any occurrences of END:MSG with \END:MSG
+            /* apply message body fixes depending on remote carkit */
+            tmpBody = RemoteDeviceWorkArounds.smsBodyChecks(
+                BluetoothMapService.getRemoteDevice().getAddress().toLowerCase(),
+                tmpBody);
             bodyFragments.add(tmpBody.getBytes("UTF-8"));
         }else if (mSmsBodyPdus != null && mSmsBodyPdus.size() > 0) {
             for (SmsPdu pdu : mSmsBodyPdus) {

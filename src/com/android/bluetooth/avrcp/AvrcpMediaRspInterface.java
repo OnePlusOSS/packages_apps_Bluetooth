@@ -1,4 +1,8 @@
 /*
+ * Copyright (C) 2017, The Linux Foundation. All rights reserved.
+ * Not a Contribution.
+ */
+/*
  * Copyright (C) 2016 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -41,7 +45,7 @@ public interface AvrcpMediaRspInterface {
     public void getTotalNumOfItemsRsp(byte[] address, int rspStatus, int uidCounter,
         int numItems);
 
-    public void addrPlayerChangedRsp(int type, int playerId, int uidCounter);
+    public void addrPlayerChangedRsp(int type, int playerId, int uidCounter, byte[] address);
 
     public void avalPlayerChangedRsp(byte[] address, int type);
 
@@ -49,6 +53,6 @@ public interface AvrcpMediaRspInterface {
 
     public void nowPlayingChangedRsp(int type);
 
-    public void trackChangedRsp(int type, byte[] uid);
+    public void trackChangedRsp(int type, byte[] uid, byte[] addr);
 }
 

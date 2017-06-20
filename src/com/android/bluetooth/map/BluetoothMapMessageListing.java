@@ -89,11 +89,20 @@ public class BluetoothMapMessageListing {
     // TODO: Remove includeThreadId when MAP-IM is adopted
     public byte[] encode(boolean includeThreadId, String version) throws UnsupportedEncodingException {
         StringWriter sw = new StringWriter();
-        XmlSerializer xmlMsgElement = new FastXmlSerializer();
+        String remoteAddress = BluetoothMapService.getRemoteDevice().getAddress().toLowerCase();
+        boolean isBenzCarkit = remoteAddress.equals(RemoteDeviceWorkArounds.BENZ_CARKIT);
+        /* Use FastXmlSerializer for Benz Carkit to remove standalone encoding
+         * and xml version flags in the beginning of final XML output. */
+        XmlSerializer xmlMsgElement = RemoteDeviceWorkArounds.setXmlSerializer(isBenzCarkit);
         try {
             xmlMsgElement.setOutput(sw);
-            xmlMsgElement.startDocument("UTF-8", true);
-            xmlMsgElement.setFeature("http://xmlpull.org/v1/doc/features.html#indent-output", true);
+            if(isBenzCarkit) {
+                xmlMsgElement.text("\n");
+            } else {
+                xmlMsgElement.startDocument("UTF-8", true);
+                xmlMsgElement.setFeature("http://xmlpull.org/v1/doc/features.html#indent-output",
+                        true);
+            }
             xmlMsgElement.startTag(null, "MAP-msg-listing");
             xmlMsgElement.attribute(null, "version", version);
             // Do the XML encoding of list
@@ -109,7 +118,9 @@ public class BluetoothMapMessageListing {
         } catch (IOException e) {
             Log.w(TAG, e);
         }
-        return sw.toString().getBytes("UTF-8");
+        String msgListing = RemoteDeviceWorkArounds.handleXmlDelimeters(sw, remoteAddress);
+        return (msgListing == null ?
+                sw.toString().getBytes("UTF-8") : msgListing.getBytes("UTF-8"));
     }
 
     public void sort() {

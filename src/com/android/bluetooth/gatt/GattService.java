@@ -1,4 +1,8 @@
 /*
+ * Copyright (C) 2017, The Linux Foundation. All rights reserved.
+ * Not a Contribution.
+ */
+/*
  * Copyright (C) 2017 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -55,6 +59,7 @@ import com.android.bluetooth.R;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.BluetoothProto;
+import com.android.bluetooth.a2dp.A2dpService;
 import com.android.bluetooth.btservice.ProfileService;
 import com.android.bluetooth.util.NumberUtils;
 import com.android.internal.annotations.VisibleForTesting;
@@ -421,6 +426,15 @@ public class GattService extends ProfileService {
                 int clientIf, String address, boolean isDirect, int transport, int phy) {
             GattService service = getService();
             if (service == null) return;
+
+            //do not allow new connections with active multicast
+            A2dpService a2dpService = A2dpService.getA2dpService();
+            if (a2dpService != null &&
+                    a2dpService.isMulticastOngoing(null)) {
+                Log.i(TAG,"A2dp Multicast is Ongoing, ignore Connection Request");
+                return;
+            }
+
             service.clientConnect(clientIf, address, isDirect, transport, phy);
         }
 
@@ -550,6 +564,15 @@ public class GattService extends ProfileService {
         public void serverConnect(int serverIf, String address, boolean isDirect, int transport) {
             GattService service = getService();
             if (service == null) return;
+
+            //do not allow new connections with active multicast
+            A2dpService a2dpService = A2dpService.getA2dpService();
+            if (a2dpService != null &&
+                    a2dpService.isMulticastOngoing(null)) {
+                Log.i(TAG,"A2dp Multicast is Ongoing, ignore Connection Request");
+                return;
+            }
+
             service.serverConnect(serverIf, address, isDirect, transport);
         }
 
@@ -716,13 +739,14 @@ public class GattService extends ProfileService {
     void onScanResult(int event_type, int address_type, String address, int primary_phy,
             int secondary_phy, int advertising_sid, int tx_power, int rssi, int periodic_adv_int,
             byte[] adv_data) {
-        if (VDBG)
+        if (VDBG) {
             Log.d(TAG, "onScanResult() - event_type=0x" + Integer.toHexString(event_type)
                             + ", address_type=" + address_type + ", address=" + address
                             + ", primary_phy=" + primary_phy + ", secondary_phy=" + secondary_phy
                             + ", advertising_sid=0x" + Integer.toHexString(advertising_sid)
                             + ", tx_power=" + tx_power + ", rssi=" + rssi + ", periodic_adv_int=0x"
                             + Integer.toHexString(periodic_adv_int));
+        }
         List<UUID> remoteUuids = parseUuids(adv_data);
         addScanResult();
 
@@ -1203,7 +1227,8 @@ public class GattService extends ProfileService {
 
     void onBatchScanStorageConfigured(int status, int clientIf) {
         if (DBG) {
-            Log.d(TAG, "onBatchScanStorageConfigured() - clientIf="+ clientIf + ", status=" + status);
+            Log.d(TAG,
+                    "onBatchScanStorageConfigured() - clientIf=" + clientIf + ", status=" + status);
         }
         mScanManager.callbackDone(clientIf, status);
     }
@@ -1321,7 +1346,7 @@ public class GattService extends ProfileService {
     }
 
     private Set<ScanResult> parseFullResults(int numRecords, byte[] batchRecord) {
-        Log.d(TAG, "Batch record : " + Arrays.toString(batchRecord));
+        if (DBG) Log.d(TAG, "Batch record : " + Arrays.toString(batchRecord));
         Set<ScanResult> results = new HashSet<ScanResult>(numRecords);
         int position = 0;
         long now = SystemClock.elapsedRealtimeNanos();
@@ -1350,7 +1375,7 @@ public class GattService extends ProfileService {
             System.arraycopy(advertiseBytes, 0, scanRecord, 0, advertisePacketLen);
             System.arraycopy(scanResponseBytes, 0, scanRecord,
                     advertisePacketLen, scanResponsePacketLen);
-            Log.d(TAG, "ScanRecord : " + Arrays.toString(scanRecord));
+            if (DBG) Log.d(TAG, "ScanRecord : " + Arrays.toString(scanRecord));
             results.add(new ScanResult(device, ScanRecord.parseFromBytes(scanRecord),
                     rssi, timestampNanos));
         }
@@ -1432,9 +1457,11 @@ public class GattService extends ProfileService {
                                 ScanSettings.CALLBACK_TYPE_MATCH_LOST, client);
                     }
                 } else {
-                    Log.d(TAG, "Not reporting onlost/onfound : " + advertiserState
-                                + " scannerId = " + client.scannerId
-                                + " callbackType " + settings.getCallbackType());
+                    if (DBG) {
+                        Log.d(TAG, "Not reporting onlost/onfound : " + advertiserState
+                                        + " scannerId = " + client.scannerId + " callbackType "
+                                        + settings.getCallbackType());
+                    }
                 }
             }
         }
@@ -1446,7 +1473,7 @@ public class GattService extends ProfileService {
             Log.e(TAG, "Advertise app or callback is null");
             return;
         }
-        Log.d(TAG, "onScanParamSetupCompleted : " + status);
+        if (DBG) Log.d(TAG, "onScanParamSetupCompleted : " + status);
     }
 
     // callback from ScanManager for dispatch of errors apps.
@@ -1795,9 +1822,10 @@ public class GattService extends ProfileService {
     void clientConnect(int clientIf, String address, boolean isDirect, int transport, int phy) {
         enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
 
-        if (DBG)
+        if (DBG) {
             Log.d(TAG, "clientConnect() - address=" + address + ", isDirect=" + isDirect + ", phy= "
                             + phy);
+        }
         gattClientConnectNative(clientIf, address, isDirect, transport, phy);
     }
 
@@ -1815,7 +1843,7 @@ public class GattService extends ProfileService {
 
         Integer connId = mClientMap.connIdByAddress(clientIf, address);
         if (connId == null) {
-            Log.d(TAG, "clientSetPreferredPhy() - no connection to " + address);
+            if (DBG) Log.d(TAG, "clientSetPreferredPhy() - no connection to " + address);
             return;
         }
 
@@ -1828,7 +1856,7 @@ public class GattService extends ProfileService {
 
         Integer connId = mClientMap.connIdByAddress(clientIf, address);
         if (connId == null) {
-            Log.d(TAG, "clientReadPhy() - no connection to " + address);
+            if (DBG) Log.d(TAG, "clientReadPhy() - no connection to " + address);
             return;
         }
 
@@ -2366,7 +2394,7 @@ public class GattService extends ProfileService {
 
         Integer connId = mServerMap.connIdByAddress(serverIf, address);
         if (connId == null) {
-            Log.d(TAG, "serverSetPreferredPhy() - no connection to " + address);
+            if (DBG) Log.d(TAG, "serverSetPreferredPhy() - no connection to " + address);
             return;
         }
 
@@ -2379,7 +2407,7 @@ public class GattService extends ProfileService {
 
         Integer connId = mServerMap.connIdByAddress(serverIf, address);
         if (connId == null) {
-            Log.d(TAG, "serverReadPhy() - no connection to " + address);
+            if (DBG) Log.d(TAG, "serverReadPhy() - no connection to " + address);
             return;
         }
 
