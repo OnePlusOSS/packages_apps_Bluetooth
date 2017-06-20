@@ -573,6 +573,7 @@ public final class Avrcp {
                     Log.v(TAG, "MSG_GET_RC_FEATURES: address="+address+
                             ", features="+msg.arg1);
                 BluetoothDevice device = mAdapter.getRemoteDevice(address);
+                deviceIndex = getIndexForDevice(device);
                 if (deviceIndex == INVALID_DEVICE_INDEX) {
                     Log.v(TAG,"device entry not present, bailing out");
                     return;
@@ -747,8 +748,9 @@ public final class Avrcp {
                 if (DEBUG)
                     Log.v(TAG, "MSG_NATIVE_REQ_VOLUME_CHANGE: volume=" + absVol + " ctype="
                                     + msg.arg2);
-
-                String address = Utils.getAddressStringFromByte((byte[]) msg.obj);
+                Bundle data = msg.getData();
+                byte[] bdaddr = data.getByteArray("BdAddress");
+                String address = Utils.getAddressStringFromByte(bdaddr);
                 Log.v(TAG, "event for device address " + address);
                 deviceIndex = getIndexForDevice(mAdapter.getRemoteDevice(address));
                 if (deviceIndex == INVALID_DEVICE_INDEX) {
