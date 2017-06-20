@@ -265,6 +265,8 @@ public class AdapterService extends Service {
                 doUpdate=true;
             }
         }
+        Log.w(TAG, "onProfileServiceStateChange() serviceName=" + serviceName
+            + ", state=" + state +", doUpdate=" + doUpdate);
 
         if (!doUpdate) {
             return;
@@ -306,13 +308,13 @@ public class AdapterService extends Service {
                     if (entry.getKey().equals("com.android.bluetooth.gatt.GattService")) continue;
 
                     if (BluetoothAdapter.STATE_OFF != entry.getValue()) {
-                        debugLog("onProfileServiceStateChange() - Profile still running: "
+                        Log.w(TAG,"onProfileServiceStateChange() - Profile still running: "
                             + entry.getKey());
                         return;
                     }
                 }
             }
-            debugLog("onProfileServiceStateChange() - All profile services stopped...");
+            Log.w(TAG,"onProfileServiceStateChange() - All profile services stopped...");
             //Send message to state machine
             mProfilesStarted=false;
             mAdapterStateMachine.sendMessage(mAdapterStateMachine.obtainMessage(AdapterState.BREDR_STOPPED));
@@ -326,16 +328,19 @@ public class AdapterService extends Service {
                 Iterator<Map.Entry<String,Integer>> i = mProfileServicesState.entrySet().iterator();
                 while (i.hasNext()) {
                     Map.Entry<String,Integer> entry = i.next();
-                    if (entry.getKey().equals("com.android.bluetooth.gatt.GattService")) continue;
-
+                    debugLog("Service: " + entry.getKey());
+                    if (entry.getKey().equals("com.android.bluetooth.gatt.GattService")) {
+                        Log.w(TAG, "Skip GATT service - already started before");
+                        continue;
+                    }
                     if (BluetoothAdapter.STATE_ON != entry.getValue()) {
-                        debugLog("onProfileServiceStateChange() - Profile still not running:"
-                            + entry.getKey());
+                        Log.w(TAG, "onProfileServiceStateChange() - Profile still not running:"
+                              + entry.getKey());
                         return;
                     }
                 }
             }
-            debugLog("onProfileServiceStateChange() - All profile services started.");
+            Log.w(TAG,"onProfileServiceStateChange() - All profile services started.");
             mProfilesStarted=true;
             //Send message to state machine
             mAdapterStateMachine.sendMessage(mAdapterStateMachine.obtainMessage(AdapterState.BREDR_STARTED));
@@ -429,6 +434,7 @@ public class AdapterService extends Service {
         } else {
             Log.i(TAG, "Phone policy disabled");
         }
+        mBondStateMachine = BondStateMachine.make(mPowerManager, this, mAdapterProperties, mRemoteDevices);
 
         setAdapterService(this);
 
@@ -454,7 +460,7 @@ public class AdapterService extends Service {
         return mBinder;
     }
     public boolean onUnbind(Intent intent) {
-        debugLog("onUnbind() - calling cleanup");
+        Log.w(TAG, "onUnbind, calling cleanup");
         cleanup();
         return super.onUnbind(intent);
     }
@@ -496,7 +502,6 @@ public class AdapterService extends Service {
         mAdapterProperties.init(mRemoteDevices);
 
         debugLog("BleOnProcessStart() - Make Bond State Machine");
-        mBondStateMachine = BondStateMachine.make(this, mAdapterProperties, mRemoteDevices);
 
         mJniCallbacks.init(mBondStateMachine,mRemoteDevices);
 
@@ -520,7 +525,7 @@ public class AdapterService extends Service {
             //Startup all profile services
             setProfileServiceState(supportedProfileServices,BluetoothAdapter.STATE_ON);
         }else {
-            debugLog("startCoreProfiles(): Profile Services alreay started");
+            Log.w(TAG,"startCoreProfiles(): Profile Services alreay started");
             mAdapterStateMachine.sendMessage(mAdapterStateMachine.obtainMessage(AdapterState.BREDR_STARTED));
         }
     }
@@ -537,6 +542,24 @@ public class AdapterService extends Service {
         }
         debugLog("stopProfileServices() - No profiles services to stop or already stopped.");
         return false;
+    }
+
+    void disableProfileServices() {
+        Class[] services = Config.getSupportedProfiles();
+            for (int i=0; i<services.length; i++) {
+                boolean res = false;
+                String serviceName = services[i].getName();
+
+                mProfileServicesState.put(serviceName,BluetoothAdapter.STATE_OFF);
+                Intent intent = new Intent(this,services[i]);
+                intent.putExtra(EXTRA_ACTION,ACTION_SERVICE_STATE_CHANGED);
+                intent.putExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.STATE_OFF);
+                intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
+                res = stopService(intent);
+                Log.d(TAG, "disableProfileServices() - Stopping service "
+                    + serviceName + " with result: " + res);
+            }
+        return;
     }
 
     boolean stopGattProfileService() {
@@ -717,6 +740,7 @@ public class AdapterService extends Service {
             expectedCurrentState= BluetoothAdapter.STATE_ON;
             pendingState = BluetoothAdapter.STATE_TURNING_OFF;
         }
+        Log.w(TAG, "Total profiles ="+ (services.length));
 
         for (int i=0; i <services.length;i++) {
             String serviceName = services[i].getName();
@@ -726,14 +750,14 @@ public class AdapterService extends Service {
 
             Integer serviceState = mProfileServicesState.get(serviceName);
             if(serviceState != null && serviceState != expectedCurrentState) {
-                debugLog("setProfileServiceState() - Unable to "
+                Log.w(TAG, "setProfileServiceState() - Unable to "
                     + (state == BluetoothAdapter.STATE_OFF ? "start" : "stop" )
                     + " service " + serviceName
                     + ". Invalid state: " + serviceState);
                 continue;
             }
 
-            debugLog("setProfileServiceState() - "
+            Log.w(TAG, "setProfileServiceState() - "
                 + (state == BluetoothAdapter.STATE_OFF ? "Stopping" : "Starting")
                 + " service " + serviceName);
 
@@ -741,6 +765,7 @@ public class AdapterService extends Service {
             Intent intent = new Intent(this,services[i]);
             intent.putExtra(EXTRA_ACTION,ACTION_SERVICE_STATE_CHANGED);
             intent.putExtra(BluetoothAdapter.EXTRA_STATE,state);
+            intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
             startService(intent);
         }
     }
@@ -1552,6 +1577,10 @@ public class AdapterService extends Service {
             return false;
         }
 
+        if (mAdapterProperties.isDiscovering()) {
+            Log.i(TAG,"discovery already active, ignore startDiscovery");
+            return false;
+        }
         return startDiscoveryNative();
     }
 
@@ -1559,6 +1588,10 @@ public class AdapterService extends Service {
         enforceCallingOrSelfPermission(BLUETOOTH_ADMIN_PERM,
                                        "Need BLUETOOTH ADMIN permission");
 
+        if (!mAdapterProperties.isDiscovering()) {
+            Log.i(TAG,"discovery not active, ignore cancelDiscovery");
+            return false;
+        }
         return cancelDiscoveryNative();
     }
 
@@ -1639,13 +1672,14 @@ public class AdapterService extends Service {
      }
 
     public void updateUuids() {
-        debugLog( "updateUuids() - Updating UUIDs for bonded devices");
-        BluetoothDevice[] bondedDevices = getBondedDevices();
-        if (bondedDevices == null) return;
-
-        for (BluetoothDevice device : bondedDevices) {
-            mRemoteDevices.updateUuids(device);
-        }
+       debugLog( "update uuids for bonded devices");
+       BluetoothDevice[] bondedDevices = getBondedDevices();
+       if (bondedDevices == null) {
+           return ;
+       }
+       for (BluetoothDevice device : bondedDevices) {
+           mRemoteDevices.updateUuids(device);
+       }
     }
 
     boolean cancelBondProcess(BluetoothDevice device) {
