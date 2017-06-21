@@ -3220,23 +3220,28 @@ final class HeadsetStateMachine extends StateMachine {
 
         /* If active call is ended, no held call is present, disconnect SCO
          * and fake the MT Call indicators. */
-        Log.d(TAG, "mIsBlacklistedDevice:" + mIsBlacklistedDevice);
-        if (mIsBlacklistedDevice &&
-            mPhoneState.getNumActiveCall() == 1 &&
-            callState.mNumActive == 0 &&
-            callState.mNumHeld == 0 &&
-            callState.mCallState == HeadsetHalConstants.CALL_STATE_INCOMING) {
+        boolean isPts =
+                SystemProperties.getBoolean("bt.pts.certification", false);
+        if (!isPts) {
+            Log.d(TAG, "mIsBlacklistedDevice:" + mIsBlacklistedDevice);
+            if (mIsBlacklistedDevice &&
+                mPhoneState.getNumActiveCall() == 1 &&
+                callState.mNumActive == 0 &&
+                callState.mNumHeld == 0 &&
+                callState.mCallState == HeadsetHalConstants.CALL_STATE_INCOMING) {
 
-            Log.d(TAG, "Disconnect SCO since active call is ended, only waiting call is there");
-            Message m = obtainMessage(DISCONNECT_AUDIO);
-            m.obj = mCurrentDevice;
-            sendMessage(m);
+                Log.d(TAG, "Disconnect SCO since active call is ended," +
+                                    "only waiting call is there");
+                Message m = obtainMessage(DISCONNECT_AUDIO);
+                m.obj = mCurrentDevice;
+                sendMessage(m);
 
-            Log.d(TAG, "Send Idle call indicators once Active call disconnected.");
-            mPhoneState.setCallState(HeadsetHalConstants.CALL_STATE_IDLE);
-            phoneStateChangeNative(callState.mNumActive, callState.mNumHeld,
-                  HeadsetHalConstants.CALL_STATE_IDLE, callState.mNumber, callState.mType);
-            mIsCallIndDelay = true;
+                Log.d(TAG, "Send Idle call indicators once Active call disconnected.");
+                mPhoneState.setCallState(HeadsetHalConstants.CALL_STATE_IDLE);
+                phoneStateChangeNative(callState.mNumActive, callState.mNumHeld,
+                      HeadsetHalConstants.CALL_STATE_IDLE, callState.mNumber, callState.mType);
+                mIsCallIndDelay = true;
+            }
         }
 
         mPhoneState.setNumActiveCall(callState.mNumActive);
