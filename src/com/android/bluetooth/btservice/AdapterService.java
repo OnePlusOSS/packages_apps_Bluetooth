@@ -76,6 +76,9 @@ import com.android.internal.app.IBatteryStats;
 import com.android.internal.R;
 import com.android.bluetooth.btservice.RemoteDevices.DeviceProperties;
 import com.android.bluetooth.Utils;
+import android.net.wifi.WifiManager;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
@@ -108,6 +111,7 @@ public class AdapterService extends Service {
     private long mRxTimeTotalMs;
     private long mIdleTimeTotalMs;
     private long mEnergyUsedTotalVoltAmpSecMicro;
+    private WifiManager mWifiManager;
     private SparseArray<UidTraffic> mUidTraffic = new SparseArray<>();
 
     private final ArrayList<ProfileService> mProfiles = new ArrayList<ProfileService>();
@@ -246,6 +250,17 @@ public class AdapterService extends Service {
         }
     }
 
+    private void fetchWifiState() {
+        ConnectivityManager connMgr =
+              (ConnectivityManager)getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo networkInfo = connMgr.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
+        if (networkInfo.isConnected()) {
+            mVendor.setWifiState(true);
+        } else {
+            mVendor.setWifiState(false);
+        }
+    }
+
     public void onProfileServiceStateChanged(String serviceName, int state) {
         Message m = mHandler.obtainMessage(MESSAGE_PROFILE_SERVICE_STATE_CHANGED);
         m.obj=serviceName;
@@ -346,6 +361,8 @@ public class AdapterService extends Service {
             mProfilesStarted=true;
             //Send message to state machine
             mAdapterStateMachine.sendMessage(mAdapterStateMachine.obtainMessage(AdapterState.BREDR_STARTED));
+            //update wifi state to lower layers
+            fetchWifiState();
         }
     }
 
@@ -425,6 +442,7 @@ public class AdapterService extends Service {
 
         mSdpManager = SdpManager.init(this);
         registerReceiver(mAlarmBroadcastReceiver, new IntentFilter(ACTION_ALARM_WAKEUP));
+        registerReceiver(mWifiStateBroadcastReceiver, new IntentFilter(WifiManager.NETWORK_STATE_CHANGED_ACTION));
         mProfileObserver = new ProfileObserver(getApplicationContext(), this, new Handler());
         mProfileObserver.start();
 
@@ -605,6 +623,7 @@ public class AdapterService extends Service {
         mCleaningUp = true;
 
         unregisterReceiver(mAlarmBroadcastReceiver);
+        unregisterReceiver(mWifiStateBroadcastReceiver);
 
         if (mPendingAlarm != null) {
             mAlarmManager.cancel(mPendingAlarm);
@@ -2366,6 +2385,21 @@ public class AdapterService extends Service {
         }
     };
 
+    private final BroadcastReceiver mWifiStateBroadcastReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (intent.getAction().equals(WifiManager.NETWORK_STATE_CHANGED_ACTION) && isEnabled()) {
+                NetworkInfo networkInfo = intent.getParcelableExtra(WifiManager.EXTRA_NETWORK_INFO);
+                NetworkInfo.DetailedState ds = networkInfo.getDetailedState();
+                if (ds == NetworkInfo.DetailedState.CONNECTED) {
+                   mVendor.setWifiState(true);
+                }
+                else if (ds == NetworkInfo.DetailedState.DISCONNECTED){
+                   mVendor.setWifiState(false);
+                }
+            }
+        }
+    };
     private native static void classInitNative();
     private native boolean initNative();
     private native void cleanupNative();
