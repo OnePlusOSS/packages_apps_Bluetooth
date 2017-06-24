@@ -325,6 +325,9 @@ class PhonePolicy {
         A2dpService a2dpService = mFactory.getA2dpService();
         PanService panService = mFactory.getPanService();
 
+        boolean a2dpConnected = false;
+        boolean hsConnected = false;
+
         boolean allProfilesEmpty = true;
         List<BluetoothDevice> a2dpConnDevList = null;
         List<BluetoothDevice> hsConnDevList = null;
@@ -351,11 +354,38 @@ class PhonePolicy {
             return;
         }
 
+        if(!a2dpConnDevList.isEmpty()) {
+            for (BluetoothDevice a2dpDevice : a2dpConnDevList)
+            {
+                if(a2dpDevice.equals(device))
+                {
+                    a2dpConnected = true;
+                }
+            }
+        }
+
+        if(!hsConnDevList.isEmpty()) {
+            for (BluetoothDevice hsDevice : hsConnDevList)
+            {
+                if(hsDevice.equals(device))
+                {
+                    hsConnected = true;
+                }
+            }
+        }
+
+        // This change makes sure that we try to re-connect
+        // the profile if its connection failed and priority
+        // for desired profile is ON.
+        debugLog("HF connected for device : " + device + " " + hsConnDevList.contains(device));
+        debugLog("A2DP connected for device : " + device + " " + a2dpConnDevList.contains(device));
+
         if (hsService != null) {
             if ((hsConnDevList.isEmpty() || !(hsConnDevList.contains(device)))
                     && (hsService.getPriority(device) >= BluetoothProfile.PRIORITY_ON)
                     && (hsService.getConnectionState(device)
-                               == BluetoothProfile.STATE_DISCONNECTED)) {
+                               == BluetoothProfile.STATE_DISCONNECTED)
+                    && (a2dpConnected || (a2dpService.getPriority(device) == BluetoothProfile.PRIORITY_OFF))) {
                 debugLog("Retrying connection to HS with device " + device);
                 int maxConnections = 1;
                 int maxHfpConnectionSysProp =
@@ -368,14 +398,24 @@ class PhonePolicy {
                     return;
                 }
 
-                hsService.connect(device);
+                // proceed connection only if a2dp is connected to this device
+                // add here as if is already overloaded
+                if (a2dpConnDevList.contains(device) ||
+                     (hsService.getPriority(device) >= BluetoothProfile.PRIORITY_ON)) {
+                    debugLog("Retrying connection to HS with device " + device);
+                    hsService.connect(device);
+                } else {
+                    debugLog("do not initiate connect as A2dp is not connected");
+                }
             }
         }
+
         if (a2dpService != null) {
             if ((a2dpConnDevList.isEmpty() || !(a2dpConnDevList.contains(device)))
                     && (a2dpService.getPriority(device) >= BluetoothProfile.PRIORITY_ON)
                     && (a2dpService.getConnectionState(device)
-                               == BluetoothProfile.STATE_DISCONNECTED)) {
+                               == BluetoothProfile.STATE_DISCONNECTED)
+                    && (hsConnected || (hsService.getPriority(device) == BluetoothProfile.PRIORITY_OFF))) {
                 debugLog("Retrying connection to A2DP with device " + device);
                 int maxConnections = 1;
                 int maxA2dpConnectionSysProp =
@@ -388,7 +428,15 @@ class PhonePolicy {
                     return;
                 }
 
-                a2dpService.connect(device);
+                // proceed connection only if HFP is connected to this device
+                // add here as if is already overloaded
+                if (hsConnDevList.contains(device) ||
+                    (a2dpService.getPriority(device) >= BluetoothProfile.PRIORITY_ON)) {
+                    debugLog("Retrying connection to A2DP with device " + device);
+                    a2dpService.connect(device);
+                } else {
+                    debugLog("do not initiate connect as HFP is not connected");
+                }
             }
         }
         if (panService != null) {
