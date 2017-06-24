@@ -115,7 +115,7 @@ final class RemoteDevices {
     class DeviceProperties {
         private String mName;
         private byte[] mAddress;
-        private int mBluetoothClass;
+        private int mBluetoothClass = BluetoothClass.Device.Major.UNCATEGORIZED;
         private short mRssi;
         private ParcelUuid[] mUuids;
         private int mDeviceType;
@@ -418,10 +418,17 @@ final class RemoteDevices {
             debugLog("aclStateChangeCallback: Adapter State: "
                     + BluetoothAdapter.nameForState(state) + " Disconnected: " + device);
         }
-        intent.putExtra(BluetoothDevice.EXTRA_DEVICE, device);
-        intent.addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT
-                | Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
-        mAdapterService.sendBroadcast(intent, mAdapterService.BLUETOOTH_PERM);
+
+        if (intent != null) {
+            intent.putExtra(BluetoothDevice.EXTRA_DEVICE, device);
+            intent.addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT
+                    | Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
+            intent.addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT);
+            mAdapterService.sendBroadcast(intent, mAdapterService.BLUETOOTH_PERM);
+        } else {
+            Log.e(TAG, "aclStateChangeCallback intent is null. deviceBondState: "
+                    + device.getBondState());
+        }
     }
 
 
