@@ -1720,13 +1720,12 @@ final class A2dpStateMachine extends StateMachine {
         if (isSplitA2dpEnabled) {
             log("Split A2dp is enabled: reconfig_a2dp will take care of codec switch");
             mCodecNotifPending = false;
-            return;
         }
         // Inform the Audio Service about the codec configuration change,
         // so the Audio Service can reset accordingly the audio feeding
         // parameters in the Audio HAL to the Bluetooth stack.
         if (!newCodecConfig.sameAudioFeedingParameters(prevCodecConfig) && (mCurrentDevice != null)
-                && (getCurrentState() == mConnected)) {
+                && (getCurrentState() == mConnected) && !isSplitA2dpEnabled) {
             // Add the device only if it is currently connected
             log("Informing Audio Service. Current device: " + mCurrentDevice + "device from STACK:" + getDevice(address));
             log("Calling handleBluetoothA2dpDeviceConfigChange with " + mDummyDevice);
