@@ -121,12 +121,11 @@ public class A2dpService extends ProfileService {
                 SystemProperties.getInt("persist.bt.enable.multicast", 0);
         String offloadSupported =
                 SystemProperties.get("persist.bt.enable.splita2dp");
-        //TODO Split A2dp will be enabled by default after audio changes are
-        // merged
-        /*if (offloadSupported.isEmpty() || "true".equals(offloadSupported)) {
+        // Split A2dp will be enabled by default
+        if (offloadSupported.isEmpty() || "true".equals(offloadSupported)) {
             Log.i(TAG,"Split A2dp enabled");
             isSplitA2dpEnabled = true;
-        }*/
+        }
         if (DBG) Log.d(TAG, "START of A2dpService");
         if (a2dpMultiCastState == 1)
                 multiCastState = a2dpMultiCastState;

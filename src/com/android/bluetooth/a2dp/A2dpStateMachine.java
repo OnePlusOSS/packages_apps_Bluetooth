@@ -967,8 +967,6 @@ final class A2dpStateMachine extends StateMachine {
                                 adapterService.restoreScanMode();
                             }
                         }
-                        broadcastConnectionState(device, BluetoothProfile.STATE_DISCONNECTED,
-                             BluetoothProfile.STATE_CONNECTED);
                         synchronized (A2dpStateMachine.this) {
                             mConnectedDevicesList.remove(device);
                             log( "device " + device.getAddress() +
@@ -984,6 +982,8 @@ final class A2dpStateMachine extends StateMachine {
                                 processMultiA2dpDisconnected(device);
                             }
                         }
+                        broadcastConnectionState(device, BluetoothProfile.STATE_DISCONNECTED,
+                             BluetoothProfile.STATE_CONNECTED);
                     } else if (mTargetDevice != null && mTargetDevice.equals(device)) {
                         broadcastConnectionState(device, BluetoothProfile.STATE_DISCONNECTED,
                                                  BluetoothProfile.STATE_CONNECTING);

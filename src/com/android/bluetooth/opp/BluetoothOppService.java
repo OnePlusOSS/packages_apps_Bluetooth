@@ -82,11 +82,10 @@ public class BluetoothOppService extends ProfileService implements IObexConnecti
 
     private static final byte OPP_FORMAT_VCARD21 = 0x01;
     private static final byte OPP_FORMAT_VCARD30 = 0x02;
-    private static final byte OPP_FORMAT_VCAL10 = 0x03;
     private static final byte OPP_FORMAT_ANY_TYPE_OF_OBJ = (byte) 0xFF;
 
     private static final byte[] SUPPORTED_OPP_FORMAT = {
-            OPP_FORMAT_VCARD21, OPP_FORMAT_VCARD30, OPP_FORMAT_VCAL10, OPP_FORMAT_ANY_TYPE_OF_OBJ};
+            OPP_FORMAT_VCARD21, OPP_FORMAT_VCARD30, OPP_FORMAT_ANY_TYPE_OF_OBJ};
 
     private boolean userAccepted = false;
 
@@ -407,7 +406,7 @@ public class BluetoothOppService extends ProfileService implements IObexConnecti
             String action = intent.getAction();
             if (D) Log.v(TAG, "action : " + action);
             if (action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
-                switch (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
+                switch (mAdapter.getState()) {
                     case BluetoothAdapter.STATE_ON:
                         if (V) Log.v(TAG, "Bluetooth state changed: STATE_ON");
                         startListener();

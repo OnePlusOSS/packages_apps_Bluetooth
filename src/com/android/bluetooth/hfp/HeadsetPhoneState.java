@@ -50,6 +50,15 @@ class HeadsetPhoneState {
     // Number of held (background) calls
     private int mNumHeld = 0;
 
+    // Phone Number
+    private String mNumber;
+
+    // Type of Phone Number
+    private int mType = 0;
+
+    // If CS call
+    private boolean mIsCsCall = true;
+
     // HFP 1.6 CIND signal
     private int mSignal = 0;
 
@@ -127,6 +136,7 @@ class HeadsetPhoneState {
 
             if (SubscriptionManager.isValidSubscriptionId(subId)) {
                 mPhoneStateListener = getPhoneStateListener(subId);
+
                 if (mTelephonyManager == null) {
                     Log.e(TAG, "mTelephonyManager is null, "
                          + "cannot start listening for phone state changes");
@@ -165,6 +175,14 @@ class HeadsetPhoneState {
         mNumActive = numActive;
     }
 
+    boolean getIsCsCall() {
+        return mIsCsCall;
+    }
+
+    void setIsCsCall(boolean isCsCall) {
+        mIsCsCall = isCsCall;
+    }
+
     int getCallState() {
         return mCallState;
     }
@@ -179,6 +197,23 @@ class HeadsetPhoneState {
 
     void setNumHeldCall(int numHeldCall) {
         mNumHeld = numHeldCall;
+    }
+
+    void setNumber(String mNumberCall ) {
+        mNumber = mNumberCall;
+    }
+
+    String getNumber()
+    {
+        return mNumber;
+    }
+
+    void setType(int mTypeCall) {
+        mType = mTypeCall;
+    }
+
+    int getType() {
+        return mType;
     }
 
     int getSignal() {
@@ -265,7 +300,7 @@ class HeadsetPhoneState {
                 if (mService == HeadsetHalConstants.NETWORK_STATE_NOT_AVAILABLE) {
                     mSignal = 0;
                 } else if (signalStrength.isGsm()) {
-                    mSignal = signalStrength.getLteLevel();
+                    mSignal = signalStrength.getLevel();
                     if (mSignal == SignalStrength.SIGNAL_STRENGTH_NONE_OR_UNKNOWN) {
                         mSignal = gsmAsuToSignal(signalStrength);
                     } else {

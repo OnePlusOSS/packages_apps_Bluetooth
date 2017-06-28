@@ -174,6 +174,7 @@ public class GattService extends ProfileService {
     private Set<String> mReliableQueue = new HashSet<String>();
 
     static {
+        if (DBG) Log.d(TAG, "classInitNative called");
         classInitNative();
     }
 
@@ -208,18 +209,38 @@ public class GattService extends ProfileService {
         mServerMap.clear();
         mHandleMap.clear();
         mReliableQueue.clear();
-        if (mAdvertiseManager != null) mAdvertiseManager.cleanup();
-        if (mScanManager != null) mScanManager.cleanup();
-        if (mPeriodicScanManager != null) mPeriodicScanManager.cleanup();
+
+        if (mAdvertiseManager != null) {
+          mAdvertiseManager.cleanup();
+          mAdvertiseManager = null;
+        }
+        if (mScanManager != null) {
+          mScanManager.cleanup();
+          mScanManager = null;
+        }
+        if (mPeriodicScanManager != null) {
+          mPeriodicScanManager.cleanup();
+          mPeriodicScanManager = null;
+        }
         return true;
     }
 
     protected boolean cleanup() {
         if (DBG) Log.d(TAG, "cleanup()");
         cleanupNative();
-        if (mAdvertiseManager != null) mAdvertiseManager.cleanup();
-        if (mScanManager != null) mScanManager.cleanup();
-        if (mPeriodicScanManager != null) mPeriodicScanManager.cleanup();
+
+        if (mAdvertiseManager != null) {
+          mAdvertiseManager.cleanup();
+          mAdvertiseManager = null;
+        }
+        if (mScanManager != null) {
+          mScanManager.cleanup();
+          mScanManager = null;
+        }
+        if (mPeriodicScanManager != null){
+          mPeriodicScanManager.cleanup();
+          mPeriodicScanManager = null;
+        }
         return true;
     }
 

@@ -20,6 +20,7 @@
 
 package com.android.bluetooth.hfp;
 
+import android.bluetooth.BluetoothA2dp;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothHeadset;
 import android.bluetooth.BluetoothProfile;
@@ -37,6 +38,8 @@ import com.android.bluetooth.btservice.ProfileService;
 import com.android.bluetooth.Utils;
 import java.util.ArrayList;
 import java.util.List;
+import android.telecom.TelecomManager;
+
 
 /**
  * Provides Bluetooth Headset and Handsfree profile, as a service in
@@ -64,6 +67,11 @@ public class HeadsetService extends ProfileService {
         IntentFilter filter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
         filter.addAction(AudioManager.VOLUME_CHANGED_ACTION);
         filter.addAction(BluetoothDevice.ACTION_CONNECTION_ACCESS_REPLY);
+        filter.addAction(BluetoothA2dp.ACTION_PLAYING_STATE_CHANGED);
+        filter.addAction(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED);
+        /* TODO: Enable this after frameworks, libhardware gerrits got merged
+        filter.addAction(TelecomManager.ACTION_CALL_TYPE);
+        */
         try {
             registerReceiver(mHeadsetReceiver, filter);
         } catch (Exception e) {
@@ -108,12 +116,23 @@ public class HeadsetService extends ProfileService {
                 }
             } else if (action.equals(BluetoothDevice.ACTION_CONNECTION_ACCESS_REPLY)) {
                 int requestType = intent.getIntExtra(BluetoothDevice.EXTRA_ACCESS_REQUEST_TYPE,
-                        BluetoothDevice.REQUEST_TYPE_PHONEBOOK_ACCESS);
+                                               BluetoothDevice.REQUEST_TYPE_PHONEBOOK_ACCESS);
+                Log.v(TAG, "HeadsetService -  Received BluetoothDevice.ACTION_CONNECTION_ACCESS_REPLY");
                 if (requestType == BluetoothDevice.REQUEST_TYPE_PHONEBOOK_ACCESS) {
-                    Log.v(TAG, "Received BluetoothDevice.ACTION_CONNECTION_ACCESS_REPLY");
                     mStateMachine.handleAccessPermissionResult(intent);
                 }
+            } else if (intent.getAction().equals(BluetoothA2dp.ACTION_PLAYING_STATE_CHANGED)) {
+                Log.v(TAG, "HeadsetService -  Received BluetoothA2dp Play State changed");
+                mStateMachine.sendMessage(HeadsetStateMachine.UPDATE_A2DP_PLAY_STATE, intent);
+            } else if (intent.getAction().equals(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED)) {
+               Log.v(TAG, "HeadsetService -  Received BluetoothA2dp Conn State changed");
+               mStateMachine.sendMessage(HeadsetStateMachine.UPDATE_A2DP_CONN_STATE, intent);
+            } /* TODO: Enable this after frameworks, libhardware gerrits got merged
+            else if (intent.getAction().equals(TelecomManager.ACTION_CALL_TYPE)) {
+               Log.v(TAG, "HeadsetService -  Received BluetoothHeadset.ACTION_CALL_TYPE");
+               mStateMachine.sendMessage(HeadsetStateMachine.UPDATE_CALL_TYPE, intent);
             }
+            */
         }
     };
 
@@ -155,6 +174,13 @@ public class HeadsetService extends ProfileService {
             if (service == null) return false;
             if (DBG) Log.d(TAG, "disconnect in HeadsetService");
             return service.disconnect(device);
+        }
+
+        public boolean isInCall() {
+            HeadsetService service = getService();
+            if (service == null) return false;
+            if (DBG) Log.d(TAG, "Call status information:");
+            return service.isInCall();
         }
 
         public List<BluetoothDevice> getConnectedDevices() {
@@ -387,6 +413,11 @@ public class HeadsetService extends ProfileService {
 
         mStateMachine.sendMessage(HeadsetStateMachine.DISCONNECT, device);
         return true;
+    }
+
+    public boolean isInCall() {
+        enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
+        return mStateMachine.isInCall();
     }
 
     public List<BluetoothDevice> getConnectedDevices() {

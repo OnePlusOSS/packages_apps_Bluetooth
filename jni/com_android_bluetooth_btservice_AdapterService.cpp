@@ -23,6 +23,8 @@
 #include "utils/Log.h"
 #include "utils/misc.h"
 
+#include <hardware/vendor.h>
+#include <string.h>
 #include <pthread.h>
 #include <string.h>
 
@@ -56,12 +58,12 @@ static struct {
   jmethodID constructor;
 } android_bluetooth_UidTraffic;
 
-static const bt_interface_t* sBluetoothInterface = NULL;
-static const btsock_interface_t* sBluetoothSocketInterface = NULL;
-static JNIEnv* callbackEnv = NULL;
+static const bt_interface_t *sBluetoothInterface = NULL;
+static const btsock_interface_t *sBluetoothSocketInterface = NULL;
+static JNIEnv *callbackEnv = NULL;
 
-static jobject sJniAdapterServiceObj;
-static jobject sJniCallbacksObj;
+static jobject sJniAdapterServiceObj = NULL;
+static jobject sJniCallbacksObj = NULL;
 static jfieldID sJniCallbacksField;
 
 const bt_interface_t* getBluetoothInterface() { return sBluetoothInterface; }
@@ -496,6 +498,7 @@ static bool set_wake_alarm_callout(uint64_t delay_millis, bool should_wake,
                                    alarm_cb cb, void* data) {
   JNIThreadAttacher attacher;
   JNIEnv* env = attacher.getEnv();
+  jboolean ret = JNI_FALSE;
 
   if (env == nullptr) {
     ALOGE("%s: Unable to get JNI Env", __func__);
@@ -506,10 +509,15 @@ static bool set_wake_alarm_callout(uint64_t delay_millis, bool should_wake,
   sAlarmCallbackData = data;
 
   jboolean jshould_wake = should_wake ? JNI_TRUE : JNI_FALSE;
-  jboolean ret =
-      env->CallBooleanMethod(sJniAdapterServiceObj, method_setWakeAlarm,
+  if (sJniAdapterServiceObj) {
+      ret = env->CallBooleanMethod(sJniAdapterServiceObj, method_setWakeAlarm,
                              (jlong)delay_millis, jshould_wake);
+  } else {
+       ALOGE("JNI ERROR : JNI reference already cleaned : set_wake_alarm_callout", __FUNCTION__);
+  }
+
   if (!ret) {
+    ALOGE("%s setWakeAlarm failed:ret= %d ", __func__, ret);
     sAlarmCallback = NULL;
     sAlarmCallbackData = NULL;
   }
@@ -530,9 +538,13 @@ static int acquire_wake_lock_callout(const char* lock_name) {
   {
     ScopedLocalRef<jstring> lock_name_jni(env, env->NewStringUTF(lock_name));
     if (lock_name_jni.get()) {
-      bool acquired = env->CallBooleanMethod(
+      if (sJniAdapterServiceObj) {
+        bool acquired = env->CallBooleanMethod(
           sJniAdapterServiceObj, method_acquireWakeLock, lock_name_jni.get());
-      if (!acquired) ret = BT_STATUS_WAKELOCK_ERROR;
+        if (!acquired) ret = BT_STATUS_WAKELOCK_ERROR;
+      } else {
+          ALOGE("JNI ERROR : JNI reference already cleaned : acquire_wake_lock_callout", __FUNCTION__);
+      }
     } else {
       ALOGE("%s unable to allocate string: %s", __func__, lock_name);
       ret = BT_STATUS_NOMEM;
@@ -555,9 +567,13 @@ static int release_wake_lock_callout(const char* lock_name) {
   {
     ScopedLocalRef<jstring> lock_name_jni(env, env->NewStringUTF(lock_name));
     if (lock_name_jni.get()) {
-      bool released = env->CallBooleanMethod(
-          sJniAdapterServiceObj, method_releaseWakeLock, lock_name_jni.get());
-      if (!released) ret = BT_STATUS_WAKELOCK_ERROR;
+      if (sJniAdapterServiceObj) {
+        bool released = env->CallBooleanMethod(
+            sJniAdapterServiceObj, method_releaseWakeLock, lock_name_jni.get());
+        if (!released) ret = BT_STATUS_WAKELOCK_ERROR;
+      } else {
+          ALOGE("JNI ERROR : JNI reference already cleaned : release_wake_lock_callout", __FUNCTION__);
+      }
     } else {
       ALOGE("%s unable to allocate string: %s", __func__, lock_name);
       ret = BT_STATUS_NOMEM;
@@ -661,7 +677,7 @@ static bool initNative(JNIEnv* env, jobject obj) {
   }
 
   int ret = sBluetoothInterface->init(&sBluetoothCallbacks);
-  if (ret != BT_STATUS_SUCCESS) {
+  if (ret != BT_STATUS_SUCCESS && ret != BT_STATUS_DONE) {
     ALOGE("Error while setting the callbacks: %d\n", ret);
     sBluetoothInterface = NULL;
     return JNI_FALSE;
@@ -696,6 +712,8 @@ static bool cleanupNative(JNIEnv* env, jobject obj) {
   env->DeleteGlobalRef(sJniAdapterServiceObj);
   env->DeleteGlobalRef(android_bluetooth_UidTraffic.clazz);
   android_bluetooth_UidTraffic.clazz = NULL;
+  sJniCallbacksObj = NULL;
+  sJniAdapterServiceObj = NULL;
   return JNI_TRUE;
 }
 
@@ -1319,95 +1337,78 @@ int register_com_android_bluetooth_btservice_AdapterService(JNIEnv* env) {
 /*
  * JNI Initialization
  */
-jint JNI_OnLoad(JavaVM* jvm, void* reserved) {
-  JNIEnv* e;
-  int status;
+jint JNI_OnLoad(JavaVM *jvm, void *reserved)
+{
+    JNIEnv *e;
+    int status;
 
-  ALOGV("Bluetooth Adapter Service : loading JNI\n");
+    ALOGV("Bluetooth Adapter Service : loading JNI\n");
 
-  // Check JNI version
-  if (jvm->GetEnv((void**)&e, JNI_VERSION_1_6)) {
-    ALOGE("JNI version mismatch error");
-    return JNI_ERR;
-  }
+    // Check JNI version
+    if (jvm->GetEnv((void **)&e, JNI_VERSION_1_6)) {
+        ALOGE("JNI version mismatch error");
+        return JNI_ERR;
+    }
 
-  status = android::register_com_android_bluetooth_btservice_AdapterService(e);
-  if (status < 0) {
-    ALOGE("jni adapter service registration failure, status: %d", status);
-    return JNI_ERR;
-  }
+    if ((status = android::register_com_android_bluetooth_btservice_AdapterService(e)) < 0) {
+        ALOGE("jni adapter service registration failure, status: %d", status);
+        return JNI_ERR;
+    }
 
-  status = android::register_com_android_bluetooth_hfp(e);
-  if (status < 0) {
-    ALOGE("jni hfp registration failure, status: %d", status);
-    return JNI_ERR;
-  }
+    if ((status = android::register_com_android_bluetooth_hfp(e)) < 0) {
+        ALOGE("jni hfp registration failure, status: %d", status);
+        return JNI_ERR;
+    }
 
-  status = android::register_com_android_bluetooth_hfpclient(e);
-  if (status < 0) {
-    ALOGE("jni hfp client registration failure, status: %d", status);
-    return JNI_ERR;
-  }
+    if ((status = android::register_com_android_bluetooth_hfpclient(e)) < 0) {
+        ALOGE("jni hfp client registration failure, status: %d", status);
+        return JNI_ERR;
+    }
 
-  status = android::register_com_android_bluetooth_a2dp(e);
-  if (status < 0) {
-    ALOGE("jni a2dp source registration failure: %d", status);
-    return JNI_ERR;
-  }
+    if ((status = android::register_com_android_bluetooth_a2dp(e)) < 0) {
+        ALOGE("jni a2dp source registration failure: %d", status);
+        return JNI_ERR;
+    }
 
-  status = android::register_com_android_bluetooth_a2dp_sink(e);
-  if (status < 0) {
-    ALOGE("jni a2dp sink registration failure: %d", status);
-    return JNI_ERR;
-  }
+    if ((status = android::register_com_android_bluetooth_a2dp_sink(e)) < 0) {
+        ALOGE("jni a2dp sink registration failure: %d", status);
+        return JNI_ERR;
+    }
 
-  status = android::register_com_android_bluetooth_avrcp(e);
-  if (status < 0) {
-    ALOGE("jni avrcp target registration failure: %d", status);
-    return JNI_ERR;
-  }
+    if ((status = android::register_com_android_bluetooth_avrcp(e)) < 0) {
+        ALOGE("jni avrcp target registration failure: %d", status);
+        return JNI_ERR;
+    }
 
-  status = android::register_com_android_bluetooth_avrcp_controller(e);
-  if (status < 0) {
-    ALOGE("jni avrcp controller registration failure: %d", status);
-    return JNI_ERR;
-  }
+    if ((status = android::register_com_android_bluetooth_avrcp_controller(e)) < 0) {
+        ALOGE("jni avrcp controller registration failure: %d", status);
+        return JNI_ERR;
+    }
 
-  status = android::register_com_android_bluetooth_hid(e);
-  if (status < 0) {
-    ALOGE("jni hid registration failure: %d", status);
-    return JNI_ERR;
-  }
+    if ((status = android::register_com_android_bluetooth_hid(e)) < 0) {
+        ALOGE("jni hid registration failure: %d", status);
+        return JNI_ERR;
+    }
 
-  status = android::register_com_android_bluetooth_hidd(e);
-  if (status < 0) {
-    ALOGE("jni hidd registration failure: %d", status);
-    return JNI_ERR;
-  }
+    if ((status = android::register_com_android_bluetooth_hdp(e)) < 0) {
+        ALOGE("jni hdp registration failure: %d", status);
+        return JNI_ERR;
+    }
 
-  status = android::register_com_android_bluetooth_hdp(e);
-  if (status < 0) {
-    ALOGE("jni hdp registration failure: %d", status);
-    return JNI_ERR;
-  }
+    if ((status = android::register_com_android_bluetooth_pan(e)) < 0) {
+        ALOGE("jni pan registration failure: %d", status);
+        return JNI_ERR;
+    }
 
-  status = android::register_com_android_bluetooth_pan(e);
-  if (status < 0) {
-    ALOGE("jni pan registration failure: %d", status);
-    return JNI_ERR;
-  }
+    if ((status = android::register_com_android_bluetooth_gatt(e)) < 0) {
+        ALOGE("jni gatt registration failure: %d", status);
+        return JNI_ERR;
+    }
 
-  status = android::register_com_android_bluetooth_gatt(e);
-  if (status < 0) {
-    ALOGE("jni gatt registration failure: %d", status);
-    return JNI_ERR;
-  }
+    if ((status = android::register_com_android_bluetooth_sdp(e)) < 0) {
+        ALOGE("jni sdp registration failure: %d", status);
+        return JNI_ERR;
+    }
 
-  status = android::register_com_android_bluetooth_sdp(e);
-  if (status < 0) {
-    ALOGE("jni sdp registration failure: %d", status);
-    return JNI_ERR;
-  }
-
-  return JNI_VERSION_1_6;
+    return JNI_VERSION_1_6;
 }
