@@ -326,7 +326,17 @@ final class A2dpStateMachine extends StateMachine {
     }
 
     public void cleanup() {
+        log("Enter cleanup()");
+        int deviceSize = mConnectedDevicesList.size();
+        log("cleanup: mConnectedDevicesList size is " + deviceSize);
         cleanupNative();
+        BluetoothDevice device;
+        for (int i = 0; i < deviceSize; i++) {
+             device = mConnectedDevicesList.get(i);
+             broadcastConnectionStateImmediate(device, BluetoothProfile.STATE_DISCONNECTED,
+                                      BluetoothProfile.STATE_CONNECTED);
+        }
+        log("Exit cleanup()");
     }
 
         private class Disconnected extends State {
@@ -1885,6 +1895,18 @@ final class A2dpStateMachine extends StateMachine {
         mWakeLock.acquire();
         mIntentBroadcastHandler.sendMessage(mIntentBroadcastHandler.obtainMessage(
             MSG_CONNECTION_STATE_CHANGED, prevState, newState, device));
+    }
+
+    private void broadcastConnectionStateImmediate(BluetoothDevice device, int state, int prevState) {
+        log("Enter broadcastConnectionStateImmediate() ");
+        Intent intent = new Intent(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED);
+        intent.putExtra(BluetoothProfile.EXTRA_PREVIOUS_STATE, prevState);
+        intent.putExtra(BluetoothProfile.EXTRA_STATE, state);
+        intent.putExtra(BluetoothDevice.EXTRA_DEVICE, device);
+        intent.addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT);
+        mContext.sendBroadcast(intent, ProfileService.BLUETOOTH_PERM);
+        log("Connection state " + device + ": " + prevState + "->" + state);
+        log("Exit broadcastConnectionStateImmediate() ");
     }
 
     private void broadcastAudioState(BluetoothDevice device, int state, int prevState) {
