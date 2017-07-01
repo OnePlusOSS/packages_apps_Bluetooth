@@ -1456,21 +1456,24 @@ public final class Avrcp {
 
     private void updateCurrentMediaState(boolean registering, BluetoothDevice device) {
         // Only do player updates when we aren't registering for track changes.
-        if (!registering) {
+        if (!registering && device == null) {
             byte[] addr = null;
-            for (int i = 0; i < maxAvrcpConnections; i++) {
+            int i;
+            for (i = 0; i < maxAvrcpConnections; i++) {
                 if (deviceFeatures[i].isActiveDevice) {
                     addr = getByteAddress(deviceFeatures[i].mCurrentDevice);
                     break;
                 }
             }
-            if (mAvailablePlayerViewChanged) {
+            if (mAvailablePlayerViewChanged && addr != null) {
+                deviceFeatures[i].mAvailablePlayersChangedNT =
+                                   AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
                 registerNotificationRspAvalPlayerChangedNative(
                         AvrcpConstants.NOTIFICATION_TYPE_CHANGED, addr);
                 mAvailablePlayerViewChanged = false;
             }
             if (mAddrPlayerChangedNT == AvrcpConstants.NOTIFICATION_TYPE_INTERIM
-                    && mReportedPlayerID != mCurrAddrPlayerID) {
+                    && mReportedPlayerID != mCurrAddrPlayerID && addr != null) {
                 registerNotificationRspAddrPlayerChangedNative(
                         AvrcpConstants.NOTIFICATION_TYPE_CHANGED, mCurrAddrPlayerID, sUIDCounter, addr);
                 mAddrPlayerChangedNT = AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
@@ -3408,17 +3411,13 @@ public final class Avrcp {
             for (int i = 0; i < maxAvrcpConnections; i++) {
                 if (deviceFeatures[i].isActiveDevice) {
                     addr = getByteAddress(deviceFeatures[i].mCurrentDevice);
+                    deviceFeatures[i].mTrackChangedNT = type;
                     break; 
                 }
             }
             if (addr == null) {
-                Log.e(TAG,"uidsChangedRsp:No active device found,use default");
-                for (int i = 0; i < maxAvrcpConnections; i++) {
-                    if (deviceFeatures[i].mCurrentDevice != null) { 
-                        addr = getByteAddress(deviceFeatures[i].mCurrentDevice);
-                        break;
-                    }
-                }
+                Log.e(TAG,"uidsChangedRsp:No active device found");
+                return;
             }
             if (!registerNotificationRspUIDsChangedNative(type, sUIDCounter, addr)) {
                 Log.e(TAG, "registerNotificationRspUIDsChangedNative failed!");
@@ -3436,19 +3435,14 @@ public final class Avrcp {
             for (int i = 0; i < maxAvrcpConnections; i++) {
                 if (deviceFeatures[i].isActiveDevice) {
                     addr = getByteAddress(deviceFeatures[i].mCurrentDevice);
+                    deviceFeatures[i].mNowPlayingChangedNT = type;
                     break; 
                 }
             }
             if (addr == null) {
-                Log.e(TAG,"uidsChangedRsp:No active device found,use default");
-                for (int i = 0; i < maxAvrcpConnections; i++) {
-                    if (deviceFeatures[i].mCurrentDevice != null) { 
-                        addr = getByteAddress(deviceFeatures[i].mCurrentDevice);
-                        break;
-                    }
-                }
+                Log.e(TAG,"uidsChangedRsp:No active device found");
+                return;
             }
-            //if (!registerNotificationRspNowPlayingChangedNative(type, null)) {
             if (!registerNotificationRspNowPlayingChangedNative(type, addr)) {
                 Log.e(TAG, "registerNotificationRspNowPlayingChangedNative failed!");
             }
