@@ -299,10 +299,12 @@ public class Constants {
      * completed.
      */
     public static void sendIntentIfCompleted(Context context, Uri contentUri, int status) {
+        if (DEBUG) Log.d(TAG, "sendIntentIfCompleted :" + status + " URI :" + contentUri);
         if (BluetoothShare.isStatusCompleted(status)) {
             Intent intent = new Intent(BluetoothShare.TRANSFER_COMPLETED_ACTION);
             intent.setClassName(THIS_PACKAGE_NAME, BluetoothOppReceiver.class.getName());
             intent.setDataAndNormalize(contentUri);
+            intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
             context.sendBroadcast(intent);
         }
     }

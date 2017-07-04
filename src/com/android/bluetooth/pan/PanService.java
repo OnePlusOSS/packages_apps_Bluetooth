@@ -535,6 +535,7 @@ public class PanService extends ProfileService {
         intent.putExtra(BluetoothPan.EXTRA_PREVIOUS_STATE, prevState);
         intent.putExtra(BluetoothPan.EXTRA_STATE, state);
         intent.putExtra(BluetoothPan.EXTRA_LOCAL_ROLE, local_role);
+        intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
         sendBroadcast(intent, BLUETOOTH_PERM);
     }
 

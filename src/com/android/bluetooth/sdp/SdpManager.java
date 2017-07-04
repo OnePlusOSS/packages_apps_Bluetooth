@@ -453,6 +453,7 @@ public class SdpManager {
          * Keep in mind that the MAP client needs to use this as well,
          * hence to make it call-backs, the MAP client profile needs to be
          * part of the Bluetooth APK. */
+        intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
         sAdapterService.sendBroadcast(intent, AdapterService.BLUETOOTH_ADMIN_PERM);
 
         if(moreResults == false) {
