@@ -146,6 +146,7 @@ public class AdapterService extends Service {
     private static final int CONTROLLER_ENERGY_UPDATE_TIMEOUT_MILLIS = 30;
 
     static {
+        System.loadLibrary("bluetooth_jni");
         classInitNative();
     }
 
