@@ -175,6 +175,7 @@ public class GattService extends ProfileService {
 
     static {
         if (DBG) Log.d(TAG, "classInitNative called");
+        System.loadLibrary("bluetooth_jni");
         classInitNative();
     }
 
