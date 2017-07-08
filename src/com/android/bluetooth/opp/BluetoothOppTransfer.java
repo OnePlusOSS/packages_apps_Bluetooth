@@ -349,6 +349,7 @@ public class BluetoothOppTransfer implements BluetoothOppBatch.BluetoothOppBatch
                         nm.cancel(mCurrentShare.mId);
                         // Send intent to UI for timeout handling
                         Intent in = new Intent(BluetoothShare.USER_CONFIRMATION_TIMEOUT_ACTION);
+                        in.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
                         mContext.sendBroadcast(in);
 
                         markShareTimeout(mCurrentShare);

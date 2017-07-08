@@ -183,6 +183,7 @@ public class BluetoothOppLauncherActivity extends Activity {
             intent1.setAction(action);
             intent1.setClassName(Constants.THIS_PACKAGE_NAME, BluetoothOppReceiver.class.getName());
             intent1.setDataAndNormalize(uri);
+            intent1.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
             this.sendBroadcast(intent1);
             finish();
         } else {
