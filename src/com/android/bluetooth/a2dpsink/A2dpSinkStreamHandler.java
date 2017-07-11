@@ -104,11 +104,11 @@ public class A2dpSinkStreamHandler extends Handler {
             case SRC_STR_START:
                 // Audio stream has started, stop it if we don't have focus.
                 mStreamAvailable = true;
+                // Allow starting music playing from Source
                 if (mAudioFocus == AudioManager.AUDIOFOCUS_NONE) {
-                    sendAvrcpPause();
-                } else {
-                    startAvrcpUpdates();
+                    requestAudioFocus();
                 }
+                startAvrcpUpdates();
                 break;
 
             case SRC_STR_STOP:
@@ -131,12 +131,11 @@ public class A2dpSinkStreamHandler extends Handler {
                 break;
 
             case SRC_PLAY:
-                // Remote play command, if we have audio focus update avrcp, otherwise send pause.
+                // Allow starting music playing from Source
                 if (mAudioFocus == AudioManager.AUDIOFOCUS_NONE) {
-                    sendAvrcpPause();
-                } else {
-                    startAvrcpUpdates();
+                    requestAudioFocus();
                 }
+                startAvrcpUpdates();
                 break;
 
             case SRC_PAUSE:
