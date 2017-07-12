@@ -146,6 +146,7 @@ public class AdapterService extends Service {
     private static final int CONTROLLER_ENERGY_UPDATE_TIMEOUT_MILLIS = 30;
 
     static {
+        System.loadLibrary("bluetooth_jni");
         classInitNative();
     }
 
@@ -715,7 +716,6 @@ public class AdapterService extends Service {
                 debugLog("setProfileServiceState() - "
                     + (state == BluetoothAdapter.STATE_OFF ? "Stopping" : "Starting")
                     + " service " + serviceName);
-
                 mProfileServicesState.put(serviceName,pendingState);
                 Intent intent = new Intent(this,services[i]);
                 intent.putExtra(EXTRA_ACTION,ACTION_SERVICE_STATE_CHANGED);
@@ -922,8 +922,9 @@ public class AdapterService extends Service {
             //do not allow setmode when multicast is active
             A2dpService a2dpService = A2dpService.getA2dpService();
             if (a2dpService != null &&
-                    a2dpService.isMulticastOngoing(null)) {
-                Log.e(TAG,"A2dp Multicast is Ongoing, ignore setmode " + mode);
+                a2dpService.isMulticastFeatureEnabled() &&
+                a2dpService.isMulticastOngoing(null)) {
+                Log.i(TAG,"A2dp Multicast is Ongoing, ignore setmode " + mode);
                 mScanmode = mode;
                 return false;
             }
@@ -1572,7 +1573,8 @@ public class AdapterService extends Service {
         //do not allow new connections with active multicast
         A2dpService a2dpService = A2dpService.getA2dpService();
         if (a2dpService != null &&
-                a2dpService.isMulticastOngoing(null)) {
+            a2dpService.isMulticastFeatureEnabled() &&
+            a2dpService.isMulticastOngoing(null)) {
             Log.i(TAG,"A2dp Multicast is Ongoing, ignore discovery");
             return false;
         }
@@ -1642,8 +1644,9 @@ public class AdapterService extends Service {
         // Multicast: Do not allow bonding while multcast
         A2dpService a2dpService = A2dpService.getA2dpService();
         if (a2dpService != null &&
-                a2dpService.isMulticastOngoing(null)) {
-            Log.e(TAG,"A2dp Multicast is ongoing, ignore bonding");
+            a2dpService.isMulticastFeatureEnabled() &&
+            a2dpService.isMulticastOngoing(null)) {
+            Log.i(TAG,"A2dp Multicast is ongoing, ignore bonding");
             return false;
         }
 

@@ -97,13 +97,14 @@ public class BluetoothOppObexClientSession implements BluetoothOppObexSession {
             mInterrupted = true;
             try {
                 mThread.interrupt();
-                if (V) Log.v(TAG, "waiting for thread to terminate");
+                if (D) Log.d(TAG, "waiting for thread to terminate");
                 mThread.join();
                 mThread = null;
             } catch (InterruptedException e) {
-                if (V) Log.v(TAG, "Interrupted waiting for thread to join");
+                if (D) Log.d(TAG, "Interrupted waiting for thread to join");
             }
         }
+        if (D) Log.d(TAG, "ClientThread terminated");
         NotificationManager nm =
                 (NotificationManager) mContext.getSystemService(Context.NOTIFICATION_SERVICE);
         nm.cancel(BluetoothOppNotification.NOTIFICATION_ID_PROGRESS);
@@ -434,7 +435,7 @@ public class BluetoothOppObexClientSession implements BluetoothOppObexSession {
 
                         if (responseCode == ResponseCodes.OBEX_HTTP_CONTINUE
                                 || responseCode == ResponseCodes.OBEX_HTTP_OK) {
-                            if (V) Log.v(TAG, "Remote accept");
+                            if (D) Log.d(TAG, "Remote accept");
                             okToProceed = true;
                             updateValues = new ContentValues();
                             updateValues.put(BluetoothShare.CURRENT_BYTES, position);
@@ -512,9 +513,13 @@ public class BluetoothOppObexClientSession implements BluetoothOppObexSession {
                     if (outputStream != null) {
                         outputStream.close();
                     }
+                } catch (IOException e) {
+                    Log.e(TAG, "Error when closing output stream after send");
+                }
 
-                    // Close InputStream and remove SendFileInfo from map
-                    BluetoothOppUtility.closeSendFileInfo(mInfo.mUri);
+                // Close InputStream and remove SendFileInfo from map
+                BluetoothOppUtility.closeSendFileInfo(mInfo.mUri);
+                try {
                     if (!error) {
                         responseCode = putOperation.getResponseCode();
                         if (responseCode != -1) {
@@ -578,7 +583,7 @@ public class BluetoothOppObexClientSession implements BluetoothOppObexSession {
             super.interrupt();
             synchronized (this) {
                 if (mWaitingForRemote) {
-                    if (V) Log.v(TAG, "Interrupted when waitingForRemote");
+                    if (D) Log.d(TAG, "Interrupted when waitingForRemote");
                     try {
                         mTransport1.close();
                     } catch (IOException e) {

@@ -221,6 +221,7 @@ public class BluetoothOppReceiver extends BroadcastReceiver {
                     handoverIntent.putExtra(Constants.EXTRA_BT_OPP_TRANSFER_STATUS,
                             Constants.HANDOVER_TRANSFER_STATUS_FAILURE);
                 }
+                handoverIntent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
                 context.sendBroadcast(handoverIntent, Constants.HANDOVER_STATUS_PERMISSION);
                 return;
             }

@@ -322,6 +322,7 @@ final class HeadsetStateMachine extends StateMachine {
         Log.d(TAG, "Enter doQuit()");
         int size = 0;
         if (mAudioManager != null) {
+             mAudioManager.setParameters("BT_SCO=off");
              mAudioManager.setBluetoothScoOn(false);
         }
         if (mActiveScoDevice != null && !mPhoneState.getIsCsCall()) {
@@ -344,6 +345,7 @@ final class HeadsetStateMachine extends StateMachine {
 
     public void cleanup() {
         if (mAudioManager != null) {
+             mAudioManager.setParameters("BT_SCO=off");
              mAudioManager.setBluetoothScoOn(false);
         }
         if (mPhoneProxy != null) {
@@ -1273,6 +1275,8 @@ final class HeadsetStateMachine extends StateMachine {
                     // TODO(BT) should I save the state for next broadcast as the prevState?
                     mAudioState = BluetoothHeadset.STATE_AUDIO_CONNECTED;
                     setAudioParameters(device); /*Set proper Audio Paramters.*/
+
+                    mAudioManager.setParameters("BT_SCO=on");
                     mAudioManager.setBluetoothScoOn(true);
                     broadcastAudioState(device, BluetoothHeadset.STATE_AUDIO_CONNECTED,
                             BluetoothHeadset.STATE_AUDIO_CONNECTING);
@@ -1777,9 +1781,11 @@ final class HeadsetStateMachine extends StateMachine {
                         if (mAudioManager.isSpeakerphoneOn()) {
                             // User option might be speaker as sco disconnection
                             // is delayed setting back the speaker option.
+                            mAudioManager.setParameters("BT_SCO=off");
                             mAudioManager.setBluetoothScoOn(false);
                             mAudioManager.setSpeakerphoneOn(true);
                         } else {
+                            mAudioManager.setParameters("BT_SCO=off");
                             mAudioManager.setBluetoothScoOn(false);
                         }
                         if (mA2dpSuspend) {
@@ -2297,6 +2303,7 @@ final class HeadsetStateMachine extends StateMachine {
                     }
                     mAudioState = BluetoothHeadset.STATE_AUDIO_CONNECTED;
                     setAudioParameters(device); /* Set proper Audio Parameters. */
+                    mAudioManager.setParameters("BT_SCO=on");
                     mAudioManager.setBluetoothScoOn(true);
                     mActiveScoDevice = device;
                     broadcastAudioState(device, BluetoothHeadset.STATE_AUDIO_CONNECTED,
@@ -2322,9 +2329,11 @@ final class HeadsetStateMachine extends StateMachine {
                     if (mAudioManager.isSpeakerphoneOn()) {
                         // User option might be speaker as sco disconnection
                         // is delayed setting back the speaker option.
+                        mAudioManager.setParameters("BT_SCO=off");
                         mAudioManager.setBluetoothScoOn(false);
                         mAudioManager.setSpeakerphoneOn(true);
                     } else {
+                        mAudioManager.setParameters("BT_SCO=off");
                         mAudioManager.setBluetoothScoOn(false);
                     }
                         if (mA2dpSuspend) {
@@ -3211,23 +3220,28 @@ final class HeadsetStateMachine extends StateMachine {
 
         /* If active call is ended, no held call is present, disconnect SCO
          * and fake the MT Call indicators. */
-        Log.d(TAG, "mIsBlacklistedDevice:" + mIsBlacklistedDevice);
-        if (mIsBlacklistedDevice &&
-            mPhoneState.getNumActiveCall() == 1 &&
-            callState.mNumActive == 0 &&
-            callState.mNumHeld == 0 &&
-            callState.mCallState == HeadsetHalConstants.CALL_STATE_INCOMING) {
+        boolean isPts =
+                SystemProperties.getBoolean("bt.pts.certification", false);
+        if (!isPts) {
+            Log.d(TAG, "mIsBlacklistedDevice:" + mIsBlacklistedDevice);
+            if (mIsBlacklistedDevice &&
+                mPhoneState.getNumActiveCall() == 1 &&
+                callState.mNumActive == 0 &&
+                callState.mNumHeld == 0 &&
+                callState.mCallState == HeadsetHalConstants.CALL_STATE_INCOMING) {
 
-            Log.d(TAG, "Disconnect SCO since active call is ended, only waiting call is there");
-            Message m = obtainMessage(DISCONNECT_AUDIO);
-            m.obj = mCurrentDevice;
-            sendMessage(m);
+                Log.d(TAG, "Disconnect SCO since active call is ended," +
+                                    "only waiting call is there");
+                Message m = obtainMessage(DISCONNECT_AUDIO);
+                m.obj = mCurrentDevice;
+                sendMessage(m);
 
-            Log.d(TAG, "Send Idle call indicators once Active call disconnected.");
-            mPhoneState.setCallState(HeadsetHalConstants.CALL_STATE_IDLE);
-            phoneStateChangeNative(callState.mNumActive, callState.mNumHeld,
-                  HeadsetHalConstants.CALL_STATE_IDLE, callState.mNumber, callState.mType);
-            mIsCallIndDelay = true;
+                Log.d(TAG, "Send Idle call indicators once Active call disconnected.");
+                mPhoneState.setCallState(HeadsetHalConstants.CALL_STATE_IDLE);
+                phoneStateChangeNative(callState.mNumActive, callState.mNumHeld,
+                      HeadsetHalConstants.CALL_STATE_IDLE, callState.mNumber, callState.mType);
+                mIsCallIndDelay = true;
+            }
         }
 
         mPhoneState.setNumActiveCall(callState.mNumActive);

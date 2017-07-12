@@ -505,7 +505,7 @@ public class BluetoothPbapService extends ProfileService implements IObexConnect
 
         // Last obex transaction is finished, we start to listen for incoming
         // connection again
-        if (mAdapter.isEnabled()) {
+        if (mAdapter != null && mAdapter.isEnabled()) {
             startSocketListeners();
         }
         setState(BluetoothPbap.STATE_DISCONNECTED);
@@ -656,12 +656,14 @@ public class BluetoothPbapService extends ProfileService implements IObexConnect
                     intent.putExtra(BluetoothDevice.EXTRA_DEVICE, mRemoteDevice);
                     intent.putExtra(BluetoothDevice.EXTRA_ACCESS_REQUEST_TYPE,
                                     BluetoothDevice.REQUEST_TYPE_PHONEBOOK_ACCESS);
+                    intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
                     sendBroadcast(intent, BLUETOOTH_ADMIN_PERM);
                     mIsWaitingAuthorization = false;
                     stopObexServerSession();
                     break;
                 case AUTH_TIMEOUT:
                     Intent i = new Intent(USER_CONFIRM_TIMEOUT_ACTION);
+                    i.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
                     sendBroadcast(i);
                     removePbapNotification(NOTIFICATION_ID_AUTH);
                     notifyAuthCancelled();
@@ -732,6 +734,7 @@ public class BluetoothPbapService extends ProfileService implements IObexConnect
             intent.putExtra(BluetoothProfile.EXTRA_PREVIOUS_STATE, prevState);
             intent.putExtra(BluetoothProfile.EXTRA_STATE, mState);
             intent.putExtra(BluetoothDevice.EXTRA_DEVICE, mRemoteDevice);
+            intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
             sendBroadcast(intent, BLUETOOTH_PERM);
         }
     }

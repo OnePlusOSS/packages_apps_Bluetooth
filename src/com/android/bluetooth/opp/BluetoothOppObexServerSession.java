@@ -342,7 +342,7 @@ public class BluetoothOppObexServerSession extends ServerRequestHandler implemen
         }
         mAccepted = mInfo.mConfirm;
 
-        if (V) Log.v(TAG, "after confirm: userAccepted=" + mAccepted);
+        if (D) Log.d(TAG, "after confirm: userAccepted=" + mAccepted);
         int status = BluetoothShare.STATUS_SUCCESS;
 
         if (mAccepted == BluetoothShare.USER_CONFIRMATION_CONFIRMED
@@ -581,6 +581,7 @@ public class BluetoothOppObexServerSession extends ServerRequestHandler implemen
                         Constants.COUNT_HEADER_UNAVAILABLE);
             }
             intent.putExtra(Constants.EXTRA_BT_OPP_ADDRESS, destination);
+            intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
             mContext.sendBroadcast(intent, Constants.HANDOVER_STATUS_PERMISSION);
         }
         mTimestamp = System.currentTimeMillis();
