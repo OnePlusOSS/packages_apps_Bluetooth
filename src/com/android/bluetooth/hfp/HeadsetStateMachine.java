@@ -1424,7 +1424,7 @@ final class HeadsetStateMachine extends StateMachine {
                                         + "one of them first");
                         DisconnectConnectedDevice = mConnectedDevicesList.get(0);
 
-                        if (mActiveScoDevice.equals(DisconnectConnectedDevice)) {
+                        if (mActiveScoDevice != null && mActiveScoDevice.equals(DisconnectConnectedDevice)) {
                             DisconnectConnectedDevice = mConnectedDevicesList.get(1);
                         }
 
@@ -1805,6 +1805,7 @@ final class HeadsetStateMachine extends StateMachine {
                             log("Sco disconnected for CS call, do not check network type");
                         }
                     }
+                    mActiveScoDevice = null;
                     transitionTo(mConnected);
                     break;
                 case HeadsetHalConstants.AUDIO_STATE_DISCONNECTING:
