@@ -290,6 +290,7 @@ public final class Avrcp {
         private int keyPressState;
         private long mTracksPlayed;
         private int mAvailablePlayersChangedNT;
+        private int mAddrPlayerChangedNT;
 
         private int mRemoteVolume;
         private int mLastRemoteVolume;
@@ -324,6 +325,7 @@ public final class Avrcp {
             keyPressState = AvrcpConstants.KEY_STATE_RELEASE; //Key release state
             mRemoteVolume = -1;
             mAvailablePlayersChangedNT = AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
+            mAddrPlayerChangedNT = AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
             mInitialRemoteVolume = -1;
             isActiveDevice = false;
             mLastRemoteVolume = -1;
@@ -1462,8 +1464,9 @@ public final class Avrcp {
                         AvrcpConstants.NOTIFICATION_TYPE_CHANGED, addr);
                 mAvailablePlayerViewChanged = false;
             }
-            if (mAddrPlayerChangedNT == AvrcpConstants.NOTIFICATION_TYPE_INTERIM
-                    && mReportedPlayerID != mCurrAddrPlayerID && addr != null) {
+            if (addr != null &&
+                deviceFeatures[i].mAddrPlayerChangedNT == AvrcpConstants.NOTIFICATION_TYPE_INTERIM
+                    && mReportedPlayerID != mCurrAddrPlayerID) {
                 registerNotificationRspAddrPlayerChangedNative(
                         AvrcpConstants.NOTIFICATION_TYPE_CHANGED, mCurrAddrPlayerID, sUIDCounter, addr);
                 mAddrPlayerChangedNT = AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
@@ -1652,6 +1655,8 @@ public final class Avrcp {
             case EVT_ADDR_PLAYER_CHANGED:
                 /* Notify remote addressed players changed */
                 if (DEBUG) Log.d(TAG, "Addressed Player notification enabled");
+                deviceFeatures[deviceIndex].mAddrPlayerChangedNT =
+                                             AvrcpConstants.NOTIFICATION_TYPE_INTERIM;
                 registerNotificationRspAddrPlayerChangedNative(
                         AvrcpConstants.NOTIFICATION_TYPE_INTERIM,
                         mCurrAddrPlayerID, sUIDCounter,
@@ -3161,6 +3166,7 @@ public final class Avrcp {
         deviceFeatures[index].mAbsVolRetryTimes = 0;
         deviceFeatures[index].mAvailablePlayersChangedNT = AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
         deviceFeatures[index].isActiveDevice = false;
+        deviceFeatures[index].mAddrPlayerChangedNT = AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
     }
 
     private synchronized void onConnectionStateChanged(
