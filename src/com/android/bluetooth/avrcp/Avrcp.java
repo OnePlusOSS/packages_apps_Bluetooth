@@ -1531,7 +1531,8 @@ public final class Avrcp {
         long newQueueId = MediaSession.QueueItem.UNKNOWN_ID;
         if (newState != null) newQueueId = newState.getActiveQueueItemId();
         Log.v(TAG, "Media update: id " + mLastQueueId + "➡" + newQueueId + "? "
-                        + currentAttributes.toRedactedString());
+                + "currentAttribute : " + currentAttributes.toRedactedString()
+                + "previousAttribute: " + mMediaAttributes.toRedactedString());
         // Notify track changed if:
         //  - The CT is registering for the notification
         //  - Queue ID is UNKNOWN and MediaMetadata is different
@@ -1541,7 +1542,12 @@ public final class Avrcp {
             if (registering && (device != null))
                 sendTrackChangedRsp(registering, device);
             else {
+                Log.v(TAG, "maxAvmaxAvrcpConnections " + maxAvrcpConnections);
                 for (int i = 0; i < maxAvrcpConnections; i++) {
+                    if (deviceFeatures[i].mCurrentDevice != null)
+                     Log.v(TAG, "deviceFeatures[i].mCurrentDevice "+deviceFeatures[i].mCurrentDevice
+                             + "deviceFeatures[i].mTrackChangedNT : " + deviceFeatures[i].mTrackChangedNT);
+
                     if ((deviceFeatures[i].mCurrentDevice != null) &&
                         (deviceFeatures[i].mTrackChangedNT == AvrcpConstants.NOTIFICATION_TYPE_INTERIM)) {
                         deviceFeatures[i].mTrackChangedNT = AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
@@ -3411,7 +3417,6 @@ public final class Avrcp {
             for (int i = 0; i < maxAvrcpConnections; i++) {
                 if (deviceFeatures[i].isActiveDevice) {
                     addr = getByteAddress(deviceFeatures[i].mCurrentDevice);
-                    deviceFeatures[i].mTrackChangedNT = type;
                     break; 
                 }
             }
