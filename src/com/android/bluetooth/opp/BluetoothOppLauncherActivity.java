@@ -162,7 +162,7 @@ public class BluetoothOppLauncherActivity extends Activity {
                                 launchDevicePicker();
                                 finish();
                             } catch (IllegalArgumentException exception) {
-                                showToast(exception.getMessage());
+                                Log.e(TAG, "SEND_MULTIPLE :" + exception.getMessage());
                                 finish();
                             }
                         }
@@ -394,18 +394,9 @@ public class BluetoothOppLauncherActivity extends Activity {
             launchDevicePicker();
             finish();
         } catch (IllegalArgumentException exception) {
-            showToast(exception.getMessage());
+            Log.e(TAG, "sendFileInfo :" + exception.getMessage());
             finish();
         }
-    }
-
-    private void showToast(final String msg) {
-        BluetoothOppLauncherActivity.this.runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                Toast.makeText(getApplicationContext(), msg, Toast.LENGTH_SHORT).show();
-            }
-        });
     }
 
 }
