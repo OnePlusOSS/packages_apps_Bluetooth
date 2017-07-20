@@ -3053,6 +3053,13 @@ public final class Avrcp {
     }
 
     private void handlePlayItemResponse(byte[] bdaddr, byte[] uid, byte scope) {
+        HeadsetService mService = HeadsetService.getHeadsetService();
+        if ((mService != null) && mService.isInCall()) {
+            Log.w(TAG, "Remote requesting play item while call is active");
+            playItemRspNative(bdaddr, AvrcpConstants.RSP_MEDIA_IN_USE);
+            return;
+        }
+
         if (scope == AvrcpConstants.BTRC_SCOPE_NOW_PLAYING) {
             mAddressedMediaPlayer.playItem(bdaddr, uid, mMediaController);
         }
@@ -3441,7 +3448,7 @@ public final class Avrcp {
                 if (deviceFeatures[i].isActiveDevice) {
                     addr = getByteAddress(deviceFeatures[i].mCurrentDevice);
                     deviceFeatures[i].mNowPlayingChangedNT = type;
-                    break; 
+                    break;
                 }
             }
             if (addr == null) {
