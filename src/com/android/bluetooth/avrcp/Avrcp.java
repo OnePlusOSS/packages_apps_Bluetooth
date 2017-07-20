@@ -530,16 +530,6 @@ public final class Avrcp {
         @Override
         public synchronized void onPlaybackStateChanged(PlaybackState state) {
             if (DEBUG) Log.v(TAG, "onPlaybackStateChanged: state " + state.toString());
-            int newPlayStatus = state.getState();
-            List<BluetoothDevice> mConnectedDevices = mA2dpService.getConnectedDevices();
-            if (!mConnectedDevices.isEmpty()) {
-                if (mA2dpService.isA2dpPlaying(mConnectedDevices.get(0))&&
-                                      (newPlayStatus == PlaybackState.STATE_PAUSED))
-                {
-                    Log.w(TAG," Do not update to Carkit");
-                    return;
-                }
-            }
             scheduleMediaUpdate();
         }
 
@@ -3170,6 +3160,7 @@ public final class Avrcp {
         deviceFeatures[index].mVolCmdAdjustInProgress = false;
         deviceFeatures[index].mAbsVolRetryTimes = 0;
         deviceFeatures[index].mAvailablePlayersChangedNT = AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
+        deviceFeatures[index].isActiveDevice = false;
     }
 
     private synchronized void onConnectionStateChanged(
