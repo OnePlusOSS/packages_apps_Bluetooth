@@ -1485,7 +1485,8 @@ public final class Avrcp {
         PlaybackState newState = null;
 
         synchronized (this) {
-            if (mMediaController == null) {
+            if (mMediaController == null ||
+                !registering && device != null) { //Update playstate for a2dp play state change
                 boolean isPlaying = (mA2dpState == BluetoothA2dp.STATE_PLAYING) && mAudioManager.isMusicActive();
                 // Use A2DP state if we don't have a MediaControlller
                 PlaybackState.Builder builder = new PlaybackState.Builder();
@@ -2480,6 +2481,11 @@ public final class Avrcp {
         android.media.session.MediaController activeController =
                 new android.media.session.MediaController(mContext, token);
         if (DEBUG) Log.v(TAG, "Set active media session " + activeController.getPackageName());
+        HeadsetService mService = HeadsetService.getHeadsetService();
+        if (mService != null && mService.isInCall()) {
+            Log.v(TAG,"Ignore setActiveMediaSession for telecom, call in progress");
+            return;
+        }
         addMediaPlayerController(activeController);
         setAddressedMediaSessionPackage(activeController.getPackageName());
     }
