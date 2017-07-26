@@ -1735,6 +1735,8 @@ final class A2dpStateMachine extends StateMachine {
         Intent intent = new Intent(BluetoothA2dp.ACTION_CODEC_CONFIG_CHANGED);
         intent.putExtra(BluetoothCodecStatus.EXTRA_CODEC_STATUS, mCodecStatus);
         intent.addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT);
+        intent.addFlags(Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
+        intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
 
         log("A2DP Codec Config: " + prevCodecConfig + "->" + newCodecConfig);
         for (BluetoothCodecConfig codecConfig : codecsLocalCapabilities) {
@@ -1911,6 +1913,8 @@ final class A2dpStateMachine extends StateMachine {
             Intent intent = new Intent(BluetoothA2dp.ACTION_CODEC_CONFIG_CHANGED);
             intent.putExtra(BluetoothCodecStatus.EXTRA_CODEC_STATUS, mCodecStatus);
             intent.addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT);
+            intent.addFlags(Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
+            intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
 
             intent.putExtra(BluetoothDevice.EXTRA_DEVICE, mDummyDevice);
             mAudioManager.handleBluetoothA2dpDeviceConfigChange(mDummyDevice);
