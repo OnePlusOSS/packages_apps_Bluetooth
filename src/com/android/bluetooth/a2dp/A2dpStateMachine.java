@@ -69,7 +69,7 @@ import java.util.List;
 import java.util.Set;
 
 final class A2dpStateMachine extends StateMachine {
-    private static final boolean DBG = false;
+    private static final boolean DBG = true;
     private static final String TAG = "A2dpStateMachine";
 
     static final int CONNECT = 1;
