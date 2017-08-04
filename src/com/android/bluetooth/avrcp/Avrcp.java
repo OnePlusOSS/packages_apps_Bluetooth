@@ -1760,8 +1760,7 @@ public final class Avrcp {
 
             if (isPlayingState(deviceFeatures[deviceIndex].mCurrentPlayState)) {
                 long sinceUpdate =
-                    (SystemClock.elapsedRealtime() - mLastStateUpdate +
-                     deviceFeatures[deviceIndex].mCurrentPlayState.getLastPositionUpdateTime());
+                     SystemClock.elapsedRealtime() - mLastStateUpdate;
                 return sinceUpdate + deviceFeatures[deviceIndex].mCurrentPlayState.getPosition();
             }
             return deviceFeatures[deviceIndex].mCurrentPlayState.getPosition();
