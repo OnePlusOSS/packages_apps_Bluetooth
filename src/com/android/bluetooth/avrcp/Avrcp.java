@@ -739,16 +739,17 @@ public final class Avrcp {
                 }
                 boolean volAdj = false;
                 if (msg.arg2 == AVRC_RSP_ACCEPT || msg.arg2 == AVRC_RSP_REJ) {
-                    if (mVolCmdAdjustInProgress == false && mVolCmdSetInProgress == false) {
+                    if ((deviceFeatures[deviceIndex].mVolCmdAdjustInProgress == false) &&
+                        (deviceFeatures[deviceIndex].mVolCmdSetInProgress == false)) {
                         Log.e(TAG, "Unsolicited response, ignored");
                         break;
                     }
                     removeMessages(MSG_ABS_VOL_TIMEOUT);
 
-                    volAdj = mVolCmdAdjustInProgress;
-                    mVolCmdAdjustInProgress = false;
-                    mVolCmdSetInProgress = false;
-                    mAbsVolRetryTimes = 0;
+                    volAdj = deviceFeatures[deviceIndex].mVolCmdAdjustInProgress;
+                    deviceFeatures[deviceIndex].mVolCmdAdjustInProgress = false;
+                    deviceFeatures[deviceIndex].mVolCmdSetInProgress = false;
+                    deviceFeatures[deviceIndex].mAbsVolRetryTimes = 0;
                 }
 
                 // convert remote volume to local volume
