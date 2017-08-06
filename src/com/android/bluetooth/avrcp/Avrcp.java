@@ -837,12 +837,6 @@ public final class Avrcp {
                     break;
                 }
 
-                if (mA2dpService.isMulticastFeatureEnabled() &&
-                        areMultipleDevicesConnected()) {
-                    if (DEBUG) Log.v(TAG, "Volume change not entertained as multicast is enabled & multiple devices are connected");
-                    break;
-                }
-
                 if (DEBUG) Log.d(TAG, "MSG_ADJUST_VOLUME: direction=" + msg.arg1);
                 for (int i = 0; i < maxAvrcpConnections; i++) {
                     if (deviceFeatures[i].mCurrentDevice != null &&
@@ -922,12 +916,6 @@ public final class Avrcp {
             {
                 if (!isAbsoluteVolumeSupported()) {
                     if (DEBUG) Log.v(TAG, "ignore MSG_SET_ABSOLUTE_VOLUME");
-                    break;
-                }
-
-                if (mA2dpService.isMulticastFeatureEnabled() &&
-                        areMultipleDevicesConnected()) {
-                    if (DEBUG) Log.v(TAG, "Volume change not entertained as multicast is enabled & multiple devices are connected");
                     break;
                 }
 
@@ -1896,9 +1884,8 @@ public final class Avrcp {
      * NOT USED AT THE MOMENT.
      */
     public boolean isAbsoluteVolumeSupported() {
-        if (mA2dpService.isMulticastFeatureEnabled() &&
-                areMultipleDevicesConnected()) {
-            if (DEBUG) Log.v(TAG, "isAbsoluteVolumeSupported : Absolute volume false multicast is enabled & multiple devices are connected");
+        if (mA2dpService.isMulticastFeatureEnabled()) {
+            if (DEBUG) Log.v(TAG, "isAbsoluteVolumeSupported : Absolute volume is false as multicast is enabled");
             return false;
         }
         List<Byte> absVolumeSupported = new ArrayList<Byte>();
