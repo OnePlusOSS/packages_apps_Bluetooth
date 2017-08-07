@@ -120,7 +120,7 @@ public class A2dpService extends ProfileService {
         int a2dpMultiCastState =
                 SystemProperties.getInt("persist.bt.enable.multicast", 0);
         String offloadSupported =
-                SystemProperties.get("persist.bt.enable.splita2dp");
+                SystemProperties.get("persist.vendor.bt.enable.splita2dp");
         if (DBG) Log.d(TAG, "START of A2dpService");
         // Split A2dp will be enabled by default
         if (offloadSupported.isEmpty() || "true".equals(offloadSupported)) {
