@@ -38,6 +38,7 @@ import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.pm.ResolveInfo;
 import android.content.res.Resources;
 import android.content.SharedPreferences;
+import android.graphics.Color;
 import android.media.AudioManager;
 import android.media.MediaDescription;
 import android.media.MediaMetadata;
@@ -59,6 +60,7 @@ import android.view.KeyEvent;
 import com.android.bluetooth.Utils;
 import android.app.Notification;
 import android.app.NotificationManager;
+import android.app.NotificationChannel;
 
 import com.android.bluetooth.btservice.ProfileService;
 import com.android.bluetooth.R;
@@ -88,6 +90,8 @@ public final class Avrcp {
     private static final String AVRCP_1_4_STRING = "avrcp14";
     private static final String AVRCP_1_5_STRING = "avrcp15";
     private static final String AVRCP_1_6_STRING = "avrcp16";
+    private static final String AVRCP_NOTIFICATION_ID = "avrcp_notification";
+    private static final String AVRCP_NOTIFICATION_NAME = "BT_ADVANCE_FEATURE_AVRCP";
 
     private Context mContext;
     private final AudioManager mAudioManager;
@@ -120,6 +124,7 @@ public final class Avrcp {
     private int mLastRemoteVolume;
     private int mInitialRemoteVolume;
     private BrowsablePlayerListBuilder mBrowsableListBuilder;
+    private NotificationManager mNotificationManager;
 
     /* Local volume in audio index 0-15 */
     private int mLocalVolume;
@@ -415,6 +420,17 @@ public final class Avrcp {
         bootFilter.addAction(Intent.ACTION_BOOT_COMPLETED);
         context.registerReceiver(mBootReceiver, bootFilter);
         pts_test = SystemProperties.getBoolean("bt.avrcpct-passthrough.pts", false);
+
+        // create Notification channel.
+        mNotificationManager = (NotificationManager)
+                mContext.getSystemService(Context.NOTIFICATION_SERVICE);
+        NotificationChannel mChannel = new NotificationChannel(AVRCP_NOTIFICATION_ID,
+                AVRCP_NOTIFICATION_NAME, NotificationManager.IMPORTANCE_DEFAULT);
+        mChannel.setDescription("Bluetooth Advanced Browsing Feature");
+        mChannel.enableLights(true);
+        mChannel.setLightColor(Color.GREEN);
+        mNotificationManager.createNotificationChannel(mChannel);
+
     }
 
     private synchronized void start() {
@@ -505,6 +521,8 @@ public final class Avrcp {
         mBrowsableListBuilder.cleanup();
         mAddressedMediaPlayer.cleanup();
         mAvrcpBrowseManager.cleanup();
+        if (mNotificationManager != null )
+            mNotificationManager.deleteNotificationChannel(AVRCP_NOTIFICATION_ID);
         Log.d(TAG, "Exit doQuit");
     }
 
@@ -621,11 +639,14 @@ public final class Avrcp {
                         .setContentText("Peer supports advanced feature")
                         .setSubText("Re-pair from peer to enable it")
                         .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+                        .setChannelId(AVRCP_NOTIFICATION_ID)
                         .setDefaults(Notification.DEFAULT_ALL)
                         .build();
-                    NotificationManager manager = (NotificationManager)
-                        mContext.getSystemService(Context.NOTIFICATION_SERVICE);
-                    manager.notify(NOTIFICATION_ID, notification);
+
+                    if (mNotificationManager != null )
+                        mNotificationManager.notify(NOTIFICATION_ID, notification);
+                    else
+                        Log.e(TAG,"mNotificationManager is null");
                     Log.v(TAG," update notification manager on remote repair request");
                 }
                 break;
