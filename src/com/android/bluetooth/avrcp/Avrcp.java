@@ -1498,7 +1498,10 @@ public final class Avrcp {
                             PlaybackState.PLAYBACK_POSITION_UNKNOWN, 0.0f);
                 }
                 newState = builder.build();
-                currentAttributes = new MediaAttributes(null);
+                if (mMediaController == null)
+                    currentAttributes = new MediaAttributes(null);
+                else
+                    currentAttributes = new MediaAttributes(mMediaController.getMetadata());
                 for (int i = 0; i < maxAvrcpConnections; i++) {
                     if (device != null) {
                         if ((isPlaying != isPlayingState(deviceFeatures[i].mCurrentPlayState)) &&
@@ -1533,8 +1536,11 @@ public final class Avrcp {
         //  - Queue ID is valid and different and MediaMetadata is different
         if (registering || (((newQueueId == -1) || (newQueueId != mLastQueueId))
                                    && !currentAttributes.equals(mMediaAttributes))) {
-            if (registering && (device != null))
+            if (registering && (device != null)) {
                 sendTrackChangedRsp(registering, device);
+                /* Do not update playstatus while processing track change notification */
+                return;
+            }
             else {
                 Log.v(TAG, "maxAvmaxAvrcpConnections " + maxAvrcpConnections);
                 for (int i = 0; i < maxAvrcpConnections; i++) {
