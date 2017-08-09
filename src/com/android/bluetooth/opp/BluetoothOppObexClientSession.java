@@ -105,10 +105,7 @@ public class BluetoothOppObexClientSession implements BluetoothOppObexSession {
             }
         }
         if (D) Log.d(TAG, "ClientThread terminated");
-        NotificationManager nm =
-                (NotificationManager) mContext.getSystemService(Context.NOTIFICATION_SERVICE);
-        nm.cancel(BluetoothOppNotification.NOTIFICATION_ID_PROGRESS);
-
+        cancelNotification();
         mCallback = null;
     }
 
@@ -418,8 +415,6 @@ public class BluetoothOppObexClientSession implements BluetoothOppObexSession {
                         outputStream.write(buffer, 0, readLength);
 
                         position += readLength;
-                        /* check remote accept or reject */
-                        responseCode = putOperation.getResponseCode();
 
                         if (position == fileInfo.mLength) {
                             // if file length is smaller than buffer size, only one packet
@@ -427,6 +422,9 @@ public class BluetoothOppObexClientSession implements BluetoothOppObexSession {
                             outputStream.close();
                             outputStream = null;
                         }
+
+                        /* check remote accept or reject */
+                        responseCode = putOperation.getResponseCode();
 
                         mCallback.removeMessages(BluetoothOppObexSession.MSG_CONNECT_TIMEOUT);
                         synchronized (this) {
@@ -565,6 +563,7 @@ public class BluetoothOppObexClientSession implements BluetoothOppObexSession {
                        Constants.updateShareStatus(mContext1, mInfo.mId, status);
                     }
                 }
+              cancelNotification();
             }
             return status;
         }
@@ -638,5 +637,11 @@ public class BluetoothOppObexClientSession implements BluetoothOppObexSession {
     private  int getBufferSize(long fileLength, long curPos, int bufferSize) {
         long readbytesleft = fileLength - curPos;
         return (readbytesleft < bufferSize) ? (int) readbytesleft : bufferSize;
+    }
+
+    private void cancelNotification() {
+        NotificationManager nm = (NotificationManager) mContext
+                .getSystemService(Context.NOTIFICATION_SERVICE);
+        nm.cancel(BluetoothOppNotification.NOTIFICATION_ID_PROGRESS);
     }
 }

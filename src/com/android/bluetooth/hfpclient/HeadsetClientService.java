@@ -120,6 +120,7 @@ public class HeadsetClientService extends ProfileService {
 
     @Override
     protected synchronized boolean stop() {
+        Log.d(TAG, "stop");
         try {
             unregisterReceiver(mBroadcastReceiver);
         } catch (Exception e) {
@@ -151,6 +152,7 @@ public class HeadsetClientService extends ProfileService {
 
     @Override
     protected boolean cleanup() {
+        Log.d(TAG, "cleanup");
         HeadsetClientStateMachine.cleanup();
         clearHeadsetClientService();
         return true;
@@ -215,6 +217,7 @@ public class HeadsetClientService extends ProfileService {
         @Override
         public boolean connect(BluetoothDevice device) {
             HeadsetClientService service = getService();
+            Log.d(TAG, "connect");
             if (service == null) {
                 return false;
             }
@@ -224,6 +227,7 @@ public class HeadsetClientService extends ProfileService {
         @Override
         public boolean disconnect(BluetoothDevice device) {
             HeadsetClientService service = getService();
+            Log.d(TAG, "disconnect");
             if (service == null) {
                 return false;
             }
@@ -481,6 +485,7 @@ public class HeadsetClientService extends ProfileService {
     }
 
     public boolean connect(BluetoothDevice device) {
+        Log.d(TAG, "Enter connect");
         enforceCallingOrSelfPermission(BLUETOOTH_ADMIN_PERM,
                 "Need BLUETOOTH ADMIN permission");
         if (DBG) {
@@ -507,10 +512,12 @@ public class HeadsetClientService extends ProfileService {
 
 
         sm.sendMessage(HeadsetClientStateMachine.CONNECT, device);
+        Log.d(TAG, "Exit connect");
         return true;
     }
 
     boolean disconnect(BluetoothDevice device) {
+        Log.d(TAG, "Enter disconnect");
         enforceCallingOrSelfPermission(BLUETOOTH_ADMIN_PERM,
                 "Need BLUETOOTH ADMIN permission");
         HeadsetClientStateMachine sm = getStateMachine(device);
@@ -526,6 +533,7 @@ public class HeadsetClientService extends ProfileService {
         }
 
         sm.sendMessage(HeadsetClientStateMachine.DISCONNECT, device);
+        Log.d(TAG, "Exit disconnect");
         return true;
     }
 
@@ -566,6 +574,7 @@ public class HeadsetClientService extends ProfileService {
     }
 
     public boolean setPriority(BluetoothDevice device, int priority) {
+        Log.d(TAG, "Enter setPriority");
         enforceCallingOrSelfPermission(BLUETOOTH_ADMIN_PERM,
                 "Need BLUETOOTH_ADMIN permission");
         Settings.Global.putInt(getContentResolver(),
@@ -574,15 +583,18 @@ public class HeadsetClientService extends ProfileService {
         if (DBG) {
             Log.d(TAG, "Saved priority " + device + " = " + priority);
         }
+        Log.d(TAG, "Exit setPriority");
         return true;
     }
 
     public int getPriority(BluetoothDevice device) {
+        Log.d(TAG, "Enter getPriority");
         enforceCallingOrSelfPermission(BLUETOOTH_ADMIN_PERM,
                 "Need BLUETOOTH_ADMIN permission");
         int priority = Settings.Global.getInt(getContentResolver(),
                 Settings.Global.getBluetoothHeadsetPriorityKey(device.getAddress()),
                 BluetoothProfile.PRIORITY_UNDEFINED);
+        Log.d(TAG, "Exit getPriority");
         return priority;
     }
 
@@ -607,6 +619,7 @@ public class HeadsetClientService extends ProfileService {
     }
 
     boolean connectAudio(BluetoothDevice device) {
+        Log.d(TAG, "Enter connectAudio");
         enforceCallingOrSelfPermission(BLUETOOTH_ADMIN_PERM, "Need BLUETOOTH_ADMIN permission");
         HeadsetClientStateMachine sm = getStateMachine(device);
         if (sm == null) {
@@ -621,10 +634,12 @@ public class HeadsetClientService extends ProfileService {
             return false;
         }
         sm.sendMessage(HeadsetClientStateMachine.CONNECT_AUDIO);
+        Log.d(TAG, "Exit connectAudio");
         return true;
     }
 
     boolean disconnectAudio(BluetoothDevice device) {
+        Log.d(TAG, "Enter disconnectAudio");
         enforceCallingOrSelfPermission(BLUETOOTH_ADMIN_PERM, "Need BLUETOOTH_ADMIN permission");
         HeadsetClientStateMachine sm = getStateMachine(device);
         if (sm == null) {
@@ -636,10 +651,12 @@ public class HeadsetClientService extends ProfileService {
             return false;
         }
         sm.sendMessage(HeadsetClientStateMachine.DISCONNECT_AUDIO);
+        Log.d(TAG, "Exit disconnectAudio");
         return true;
     }
 
     boolean holdCall(BluetoothDevice device) {
+        Log.d(TAG, "Enter holdCall");
         enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
         HeadsetClientStateMachine sm = getStateMachine(device);
         if (sm == null) {
@@ -654,10 +671,12 @@ public class HeadsetClientService extends ProfileService {
         }
         Message msg = sm.obtainMessage(HeadsetClientStateMachine.HOLD_CALL);
         sm.sendMessage(msg);
+        Log.d(TAG, "Exit holdCall");
         return true;
     }
 
     boolean acceptCall(BluetoothDevice device, int flag) {
+        Log.d(TAG, "Enter acceptCall");
         enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
         HeadsetClientStateMachine sm = getStateMachine(device);
         if (sm == null) {
@@ -673,10 +692,12 @@ public class HeadsetClientService extends ProfileService {
         Message msg = sm.obtainMessage(HeadsetClientStateMachine.ACCEPT_CALL);
         msg.arg1 = flag;
         sm.sendMessage(msg);
+        Log.d(TAG, "Exit acceptCall");
         return true;
     }
 
     boolean rejectCall(BluetoothDevice device) {
+        Log.d(TAG, "Enter rejectCall");
         enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
         HeadsetClientStateMachine sm = getStateMachine(device);
         if (sm == null) {
@@ -692,10 +713,12 @@ public class HeadsetClientService extends ProfileService {
 
         Message msg = sm.obtainMessage(HeadsetClientStateMachine.REJECT_CALL);
         sm.sendMessage(msg);
+        Log.d(TAG, "Exit rejectCall");
         return true;
     }
 
     boolean terminateCall(BluetoothDevice device, UUID uuid) {
+        Log.d(TAG, "Enter terminateCall");
         enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
         HeadsetClientStateMachine sm = getStateMachine(device);
         if (sm == null) {
@@ -712,10 +735,12 @@ public class HeadsetClientService extends ProfileService {
         Message msg = sm.obtainMessage(HeadsetClientStateMachine.TERMINATE_CALL);
         msg.obj = uuid;
         sm.sendMessage(msg);
+        Log.d(TAG, "Exit terminateCall");
         return true;
     }
 
     boolean enterPrivateMode(BluetoothDevice device, int index) {
+        Log.d(TAG, "Enter enterPrivateMode");
         enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
         HeadsetClientStateMachine sm = getStateMachine(device);
         if (sm == null) {
@@ -732,10 +757,12 @@ public class HeadsetClientService extends ProfileService {
         Message msg = sm.obtainMessage(HeadsetClientStateMachine.ENTER_PRIVATE_MODE);
         msg.arg1 = index;
         sm.sendMessage(msg);
+        Log.d(TAG, "Exit enterPrivateMode");
         return true;
     }
 
     BluetoothHeadsetClientCall dial(BluetoothDevice device, String number) {
+        Log.d(TAG, "Enter dial");
         enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
         HeadsetClientStateMachine sm = getStateMachine(device);
         if (sm == null) {
@@ -756,10 +783,12 @@ public class HeadsetClientService extends ProfileService {
         Message msg = sm.obtainMessage(HeadsetClientStateMachine.DIAL_NUMBER);
         msg.obj = call;
         sm.sendMessage(msg);
+        Log.d(TAG, "Exit dial");
         return call;
     }
 
     public boolean sendDTMF(BluetoothDevice device, byte code) {
+        Log.d(TAG, "Enter sendDTMF");
         enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
         HeadsetClientStateMachine sm = getStateMachine(device);
         if (sm == null) {
@@ -775,6 +804,7 @@ public class HeadsetClientService extends ProfileService {
         Message msg = sm.obtainMessage(HeadsetClientStateMachine.SEND_DTMF);
         msg.arg1 = code;
         sm.sendMessage(msg);
+        Log.d(TAG, "Exit sendDTMF");
         return true;
     }
 
@@ -783,6 +813,7 @@ public class HeadsetClientService extends ProfileService {
     }
 
     public List<BluetoothHeadsetClientCall> getCurrentCalls(BluetoothDevice device) {
+        Log.d(TAG, "Enter getCurrentCalls");
         enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
         HeadsetClientStateMachine sm = getStateMachine(device);
         if (sm == null) {
@@ -794,10 +825,12 @@ public class HeadsetClientService extends ProfileService {
         if (connectionState != BluetoothProfile.STATE_CONNECTED) {
             return null;
         }
+        Log.d(TAG, "Exit getCurrentCalls");
         return sm.getCurrentCalls();
     }
 
     public boolean explicitCallTransfer(BluetoothDevice device) {
+        Log.d(TAG, "Enter explicitCallTransfer");
         enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
         HeadsetClientStateMachine sm = getStateMachine(device);
         if (sm == null) {
@@ -812,10 +845,12 @@ public class HeadsetClientService extends ProfileService {
         }
         Message msg = sm.obtainMessage(HeadsetClientStateMachine.EXPLICIT_CALL_TRANSFER);
         sm.sendMessage(msg);
+        Log.d(TAG, "Exit explicitCallTransfer");
         return true;
     }
 
     public Bundle getCurrentAgEvents(BluetoothDevice device) {
+        Log.d(TAG, "Enter getCurrentAgEvents");
         enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
         HeadsetClientStateMachine sm = getStateMachine(device);
         if (sm == null) {
@@ -827,10 +862,12 @@ public class HeadsetClientService extends ProfileService {
         if (connectionState != BluetoothProfile.STATE_CONNECTED) {
             return null;
         }
+        Log.d(TAG, "Exit getCurrentAgEvents");
         return sm.getCurrentAgEvents();
     }
 
     public Bundle getCurrentAgFeatures(BluetoothDevice device) {
+        Log.d(TAG, "Enter getCurrentAgFeatures");
         enforceCallingOrSelfPermission(BLUETOOTH_PERM, "Need BLUETOOTH permission");
         HeadsetClientStateMachine sm = getStateMachine(device);
         if (sm == null) {
@@ -889,6 +926,7 @@ public class HeadsetClientService extends ProfileService {
     // This function is *only* called from the SMs which are themselves run the same thread and
     // hence we do not need synchronization here
     boolean isScoAvailable() {
+        Log.d(TAG, "Enter isScoAvailable");
         for (BluetoothDevice bd : mStateMachineMap.keySet()) {
             HeadsetClientStateMachine sm = mStateMachineMap.get(bd);
             int audioState = sm.getAudioState(bd);
@@ -897,6 +935,7 @@ public class HeadsetClientService extends ProfileService {
                 return false;
             }
         }
+        Log.d(TAG, "Exit isScoAvailable");
         return true;
     }
 

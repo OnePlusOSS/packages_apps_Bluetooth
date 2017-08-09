@@ -246,6 +246,7 @@ public class A2dpSinkStateMachine extends StateMachine {
 
         // in Disconnected state
         private void processConnectionEvent(int state, BluetoothDevice device) {
+            log("Disconnected: processConnectionEvent" + state);
             switch (state) {
             case CONNECTION_STATE_DISCONNECTED:
                 logw("Ignore A2DP DISCONNECTED event, device: " + device);
@@ -596,6 +597,7 @@ public class A2dpSinkStateMachine extends StateMachine {
 
         // in Connected state
         private void processConnectionEvent(int state, BluetoothDevice device) {
+            log("Connected: processConnectionEvent in connected state " + state);
             switch (state) {
                 case CONNECTION_STATE_DISCONNECTED:
                     mAudioConfigs.remove(device);
@@ -623,6 +625,7 @@ public class A2dpSinkStateMachine extends StateMachine {
         }
 
         private void processAudioStateEvent(int state, BluetoothDevice device) {
+            log("processAudioStateEvent state " + state);
             if (!mCurrentDevice.equals(device)) {
                 loge("Audio State Device:" + device + "is different from ConnectedDevice:" +
                                                            mCurrentDevice);
@@ -651,6 +654,7 @@ public class A2dpSinkStateMachine extends StateMachine {
     }
 
     int getConnectionState(BluetoothDevice device) {
+        log("Enter getConnectionState");
         if (getCurrentState() == mDisconnected) {
             return BluetoothProfile.STATE_DISCONNECTED;
         }
@@ -707,9 +711,9 @@ public class A2dpSinkStateMachine extends StateMachine {
 
     // Utility Functions
     boolean okToConnect(BluetoothDevice device) {
+        log("Enter okToConnect");
         AdapterService adapterService = AdapterService.getAdapterService();
         int priority = mService.getPriority(device);
-
         // check priority and accept or reject the connection. if priority is undefined
         // it is likely that our SDP has not completed and peer is initiating the
         // connection. Allow this connection, provided the device is bonded

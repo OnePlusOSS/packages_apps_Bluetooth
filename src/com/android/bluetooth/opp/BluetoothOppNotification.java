@@ -363,7 +363,7 @@ class BluetoothOppNotification {
             Intent intent = new Intent(Constants.ACTION_LIST);
             intent.setClassName(Constants.THIS_PACKAGE_NAME, BluetoothOppReceiver.class.getName());
             intent.setDataAndNormalize(Uri.parse(BluetoothShare.CONTENT_URI + "/" + item.id));
-
+            intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
             b.setContentIntent(PendingIntent.getBroadcast(mContext, 0, intent, 0));
             mNotificationMgr.notify(NOTIFICATION_ID_PROGRESS, b.build());
         }
@@ -416,9 +416,11 @@ class BluetoothOppNotification {
             Intent content_intent = new Intent(Constants.ACTION_OPEN_OUTBOUND_TRANSFER)
                     .setClassName(Constants.THIS_PACKAGE_NAME,
                             BluetoothOppReceiver.class.getName());
+            content_intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
             Intent delete_intent = new Intent(Constants.ACTION_COMPLETE_HIDE)
                     .setClassName(Constants.THIS_PACKAGE_NAME,
                             BluetoothOppReceiver.class.getName());
+            content_intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
             Notification outNoti =
                     new Notification.Builder(mContext, OPP_NOTIFICATION_CHANNEL)
                             .setOnlyAlertOnce(true)
@@ -476,9 +478,11 @@ class BluetoothOppNotification {
             Intent content_intent = new Intent(Constants.ACTION_OPEN_INBOUND_TRANSFER)
                     .setClassName(Constants.THIS_PACKAGE_NAME,
                             BluetoothOppReceiver.class.getName());
+            content_intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
             Intent delete_intent = new Intent(Constants.ACTION_COMPLETE_HIDE)
                     .setClassName(Constants.THIS_PACKAGE_NAME,
                             BluetoothOppReceiver.class.getName());
+            delete_intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
             Notification inNoti =
                     new Notification.Builder(mContext, OPP_NOTIFICATION_CHANNEL)
                             .setOnlyAlertOnce(true)
@@ -522,6 +526,7 @@ class BluetoothOppNotification {
           Uri contentUri = Uri.parse(BluetoothShare.CONTENT_URI + "/" + info.mID);
           Intent baseIntent = new Intent().setDataAndNormalize(contentUri)
               .setClassName(Constants.THIS_PACKAGE_NAME, BluetoothOppReceiver.class.getName());
+          baseIntent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
           Notification.Action actionDecline =
                   new Notification.Action
                           .Builder(R.drawable.ic_decline,

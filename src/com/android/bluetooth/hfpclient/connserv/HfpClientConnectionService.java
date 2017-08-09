@@ -264,6 +264,7 @@ public class HfpClientConnectionService extends ConnectionService {
 
         HfpClientDeviceBlock block = findBlockForDevice(bd1);
         block.onConference(connection1, connection2);
+        Log.d(TAG, "Exit onConference");
     }
 
     private BluetoothDevice getDevice(PhoneAccountHandle handle) {
