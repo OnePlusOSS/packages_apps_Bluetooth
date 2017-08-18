@@ -82,6 +82,7 @@ class PhonePolicy {
     final private static int MESSAGE_PROFILE_INIT_PRIORITIES = 2;
     final private static int MESSAGE_CONNECT_OTHER_PROFILES = 3;
     final private static int MESSAGE_ADAPTER_STATE_TURNED_ON = 4;
+    private static final int MESSAGE_AUTO_CONNECT_PROFILES = 50;
 
     public static final int PROFILE_CONN_CONNECTED = 1;
     private static final String delayConnectTimeoutDevice[] = {"00:23:3D"}; // volkswagen carkit
@@ -89,6 +90,7 @@ class PhonePolicy {
     // Timeouts
     final private static int CONNECT_OTHER_PROFILES_TIMEOUT = 6000; // 6s
     private static final int CONNECT_OTHER_PROFILES_TIMEOUT_DELAYED = 10000;
+    private static final int AUTO_CONNECT_PROFILES_TIMEOUT= 500;
 
     final private AdapterService mAdapterService;
     final private ServiceFactory mFactory;
@@ -174,6 +176,11 @@ class PhonePolicy {
                     // Call auto connect when adapter switches state to ON
                     autoConnect();
                     break;
+                case MESSAGE_AUTO_CONNECT_PROFILES: {
+                    if (DBG) debugLog( "MESSAGE_AUTO_CONNECT_PROFILES");
+                    autoConnectProfilesDelayed();
+                    break;
+                }
             }
         }
     };
@@ -252,7 +259,18 @@ class PhonePolicy {
         }
     }
 
-    private void autoConnect() {
+    // Delaying Auto Connect to make sure that all clients
+    // are up and running, specially BluetoothHeadset.
+    public void autoConnect() {
+        debugLog( "delay auto connect by 500 ms");
+        if ((mHandler.hasMessages(MESSAGE_AUTO_CONNECT_PROFILES) == false) &&
+            (mAdapterService.isQuietModeEnabled()== false)) {
+            Message m = mHandler.obtainMessage(MESSAGE_AUTO_CONNECT_PROFILES);
+            mHandler.sendMessageDelayed(m,AUTO_CONNECT_PROFILES_TIMEOUT);
+        }
+    }
+
+    private void autoConnectProfilesDelayed() {
         if (mAdapterService.getState() != BluetoothAdapter.STATE_ON) {
             errorLog("autoConnect() - BT is not ON. Exiting autoConnect");
             return;
