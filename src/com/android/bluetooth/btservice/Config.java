@@ -101,8 +101,11 @@ public class Config {
                                                                                          false);
         boolean isHfpClientEnabled = SystemProperties.getBoolean("persist.service.bt.hfp.client",
                                                                                          false);
+        boolean isAvrcpControllerEnabled = SystemProperties.getBoolean(
+                "persist.service.bt.avrcp.controller", false);
         Log.d(TAG, "addA2dpProfile: isA2dpSinkEnabled = " + isA2dpSinkEnabled+"isHfpClientEnabled "
-        + isHfpClientEnabled + " serviceName " + serviceName);
+        + isHfpClientEnabled + "isAvrcpControllerEnabled" + isAvrcpControllerEnabled +" serviceName"
+        + serviceName);
         /* If property not enabled and request is for A2DPSinkService, don't add */
         if((serviceName.equals("A2dpSinkService"))&&(!isA2dpSinkEnabled))
             return false;
@@ -112,6 +115,9 @@ public class Config {
         if((serviceName.equals("HeadsetClientService"))&&(!isHfpClientEnabled))
             return false;
         if((serviceName.equals("HeadsetService"))&&(isHfpClientEnabled))
+            return false;
+
+        if((serviceName.equals("AvrcpControllerService"))&&(!isAvrcpControllerEnabled))
             return false;
 
         return true;
