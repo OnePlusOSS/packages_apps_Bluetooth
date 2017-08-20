@@ -2975,37 +2975,39 @@ public final class Avrcp {
 
             int players = 0;
             for (Map.Entry<Integer, MediaPlayerInfo> entry : mMediaPlayerInfoList.entrySet()) {
-                MediaPlayerInfo info = entry.getValue();
-                playerIds[players] = entry.getKey();
-                playerTypes[players] = info.getMajorType();
-                playerSubTypes[players] = info.getSubType();
-                displayableNameArray[players] = info.getDisplayableName();
-                playStatusValues[players] = info.getPlayStatus();
+                if (entry.getKey() == mCurrAddrPlayerID) {
+                    MediaPlayerInfo info = entry.getValue();
+                    playerIds[players] = entry.getKey();
+                    playerTypes[players] = info.getMajorType();
+                    playerSubTypes[players] = info.getSubType();
+                    displayableNameArray[players] = info.getDisplayableName();
+                    playStatusValues[players] = info.getPlayStatus();
 
-                short[] featureBits = info.getFeatureBitMask();
-                for (int numBit = 0; numBit < featureBits.length; numBit++) {
-                    /* gives which octet this belongs to */
-                    byte octet = (byte) (featureBits[numBit] / 8);
-                    /* gives the bit position within the octet */
-                    byte bit = (byte) (featureBits[numBit] % 8);
-                    featureBitMaskValues[(players * AvrcpConstants.AVRC_FEATURE_MASK_SIZE)
-                            + octet] |= (1 << bit);
+                    short[] featureBits = info.getFeatureBitMask();
+                    for (int numBit = 0; numBit < featureBits.length; numBit++) {
+                        /* gives which octet this belongs to */
+                        byte octet = (byte) (featureBits[numBit] / 8);
+                        /* gives the bit position within the octet */
+                        byte bit = (byte) (featureBits[numBit] % 8);
+                        featureBitMaskValues[(players * AvrcpConstants.AVRC_FEATURE_MASK_SIZE)
+                                + octet] |= (1 << bit);
+                    }
+
+                    /* printLogs */
+                    if (DEBUG) {
+                        Log.d(TAG, "Player " + playerIds[players] + ": " + displayableNameArray[players]
+                                        + " type: " + playerTypes[players] + ", "
+                                        + playerSubTypes[players] + " status: "
+                                        + playStatusValues[players]);
+                    }
+
+                    players++;
                 }
-
-                /* printLogs */
-                if (DEBUG) {
-                    Log.d(TAG, "Player " + playerIds[players] + ": " + displayableNameArray[players]
-                                    + " type: " + playerTypes[players] + ", "
-                                    + playerSubTypes[players] + " status: "
-                                    + playStatusValues[players]);
-                }
-
-                players++;
             }
 
             if (DEBUG) Log.d(TAG, "prepareMediaPlayerRspObj: numPlayers = " + numPlayers);
 
-            return new MediaPlayerListRsp(AvrcpConstants.RSP_NO_ERROR, sUIDCounter, numPlayers,
+            return new MediaPlayerListRsp(AvrcpConstants.RSP_NO_ERROR, sUIDCounter, players,
                     AvrcpConstants.BTRC_ITEM_PLAYER, playerIds, playerTypes, playerSubTypes,
                     playStatusValues, featureBitMaskValues, displayableNameArray);
         }
@@ -3021,7 +3023,7 @@ public final class Avrcp {
                         (short) 0, (byte) 0, 0, null, null, null, null, null, null);
                 return;
             }
-            if (folderObj.mStartItem >= numPlayers) {
+            if (folderObj.mStartItem >= numPlayers || folderObj.mStartItem >= 1) {
                 Log.i(TAG, "handleMediaPlayerListRsp: start = " + folderObj.mStartItem
                                 + " > num of items = " + numPlayers);
                 mediaPlayerListRspNative(folderObj.mAddress, AvrcpConstants.RSP_INV_RANGE,
