@@ -65,6 +65,7 @@ import android.app.NotificationChannel;
 import com.android.bluetooth.btservice.ProfileService;
 import com.android.bluetooth.R;
 import com.android.bluetooth.Utils;
+import com.android.bluetooth.avrcpcontroller.AvrcpControllerService;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -1942,7 +1943,6 @@ public final class Avrcp {
     public void adjustVolume(int direction) {
         Log.d(TAG, "pts_test = " + pts_test + " direction = " + direction);
         if (pts_test) {
-/* TODOuv
             AvrcpControllerService avrcpCtrlService =
                     AvrcpControllerService.getAvrcpControllerService();
             if (avrcpCtrlService != null) {
@@ -1971,7 +1971,6 @@ public final class Avrcp {
             } else {
                 Log.d(TAG, "passthru command not sent, connection unavailable");
             }
-*/
         } else {
             Log.d(TAG, "MSG_ADJUST_VOLUME");
             Message msg = mHandler.obtainMessage(MSG_ADJUST_VOLUME, direction, 0);
