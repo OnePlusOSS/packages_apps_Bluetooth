@@ -142,9 +142,6 @@ public final class Avrcp {
     private int mLastDirection;
     private final int mVolumeStep;
     private final int mAudioStreamMax;
-    private boolean mVolCmdAdjustInProgress;
-    private boolean mVolCmdSetInProgress;
-    private int mAbsVolRetryTimes;
 
     private static final int NO_PLAYER_ID = 0;
 
@@ -323,6 +320,8 @@ public final class Avrcp {
             mPlayPosChangedNT = AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
             mFeatures = 0;
             mLastDirection = 0;
+            mAbsoluteVolume = -1;
+            mLastSetVolume = -1;
             mTracksPlayed = 0;
             mVolCmdAdjustInProgress = false;
             mVolCmdSetInProgress = false;
@@ -375,9 +374,6 @@ public final class Avrcp {
         mInitialRemoteVolume = -1;
         mLastRemoteVolume = -1;
         mLastDirection = 0;
-        mVolCmdAdjustInProgress = false;
-        mVolCmdSetInProgress = false;
-        mAbsVolRetryTimes = 0;
         mLocalVolume = -1;
         mLastLocalVolume = -1;
         mAbsVolThreshold = 0;
