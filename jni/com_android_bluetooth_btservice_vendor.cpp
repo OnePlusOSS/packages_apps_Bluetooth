@@ -116,11 +116,23 @@ static bool bredrcleanupNative(JNIEnv *env, jobject obj) {
     return JNI_TRUE;
 }
 
+static bool setWifiStateNative(JNIEnv *env, jobject obj, jboolean status) {
+
+    ALOGI("%s", __FUNCTION__);
+
+    jboolean result = JNI_FALSE;
+    if (!sBluetoothVendorInterface) return result;
+
+    sBluetoothVendorInterface->set_wifi_state(status);
+    return JNI_TRUE;
+}
+
 static JNINativeMethod sMethods[] = {
     {"classInitNative", "()V", (void *) classInitNative},
     {"initNative", "()V", (void *) initNative},
     {"cleanupNative", "()V", (void *) cleanupNative},
     {"bredrcleanupNative", "()V", (void*) bredrcleanupNative},
+    {"setWifiStateNative", "(Z)V", (void*) setWifiStateNative},
 };
 
 int register_com_android_bluetooth_btservice_vendor(JNIEnv* env)

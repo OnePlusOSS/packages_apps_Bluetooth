@@ -423,10 +423,15 @@ public class SapServer extends Thread implements Callback {
             /* This is expected during shutdown */
             Log.i(TAG, "IOException received, this is probably a shutdown signal, cleaning up...");
         } catch (Exception e) {
-            releaseThread();
             /* TODO: Change to the needed Exception types when done testing */
             Log.w(TAG, e);
         } finally {
+            BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+            int state = (adapter != null) ? adapter.getState() : -1;
+            if (DEBUG) Log.d(TAG, "BT State :" + state);
+            if (state != BluetoothAdapter.STATE_ON) {
+                mDeinitSignal.countDown();
+            }
             // Do cleanup even if an exception occurs
             stopDisconnectTimer();
             /* In case of e.g. a RFCOMM close while connected:
@@ -918,15 +923,6 @@ public class SapServer extends Thread implements Callback {
             return "SAP_MSG_RIL_IND";
         default:
             return "Unknown message ID";
-        }
-    }
-
-    private void releaseThread() {
-        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
-        int state = (adapter != null) ? adapter.getState() : -1;
-        if (DEBUG) Log.d(TAG, "BT State :" + state);
-        if (state != BluetoothAdapter.STATE_ON) {
-            mDeinitSignal.countDown();
         }
     }
 

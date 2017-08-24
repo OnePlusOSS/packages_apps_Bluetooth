@@ -38,6 +38,7 @@ import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.pm.ResolveInfo;
 import android.content.res.Resources;
 import android.content.SharedPreferences;
+import android.graphics.Color;
 import android.media.AudioManager;
 import android.media.MediaDescription;
 import android.media.MediaMetadata;
@@ -59,6 +60,7 @@ import android.view.KeyEvent;
 import com.android.bluetooth.Utils;
 import android.app.Notification;
 import android.app.NotificationManager;
+import android.app.NotificationChannel;
 
 import com.android.bluetooth.btservice.ProfileService;
 import com.android.bluetooth.R;
@@ -88,6 +90,8 @@ public final class Avrcp {
     private static final String AVRCP_1_4_STRING = "avrcp14";
     private static final String AVRCP_1_5_STRING = "avrcp15";
     private static final String AVRCP_1_6_STRING = "avrcp16";
+    private static final String AVRCP_NOTIFICATION_ID = "avrcp_notification";
+    private static final String AVRCP_NOTIFICATION_NAME = "BT_ADVANCE_FEATURE_AVRCP";
 
     private Context mContext;
     private final AudioManager mAudioManager;
@@ -120,6 +124,7 @@ public final class Avrcp {
     private int mLastRemoteVolume;
     private int mInitialRemoteVolume;
     private BrowsablePlayerListBuilder mBrowsableListBuilder;
+    private NotificationManager mNotificationManager;
 
     /* Local volume in audio index 0-15 */
     private int mLocalVolume;
@@ -415,6 +420,17 @@ public final class Avrcp {
         bootFilter.addAction(Intent.ACTION_BOOT_COMPLETED);
         context.registerReceiver(mBootReceiver, bootFilter);
         pts_test = SystemProperties.getBoolean("bt.avrcpct-passthrough.pts", false);
+
+        // create Notification channel.
+        mNotificationManager = (NotificationManager)
+                mContext.getSystemService(Context.NOTIFICATION_SERVICE);
+        NotificationChannel mChannel = new NotificationChannel(AVRCP_NOTIFICATION_ID,
+                AVRCP_NOTIFICATION_NAME, NotificationManager.IMPORTANCE_DEFAULT);
+        mChannel.setDescription("Bluetooth Advanced Browsing Feature");
+        mChannel.enableLights(true);
+        mChannel.setLightColor(Color.GREEN);
+        mNotificationManager.createNotificationChannel(mChannel);
+
     }
 
     private synchronized void start() {
@@ -505,6 +521,8 @@ public final class Avrcp {
         mBrowsableListBuilder.cleanup();
         mAddressedMediaPlayer.cleanup();
         mAvrcpBrowseManager.cleanup();
+        if (mNotificationManager != null )
+            mNotificationManager.deleteNotificationChannel(AVRCP_NOTIFICATION_ID);
         Log.d(TAG, "Exit doQuit");
     }
 
@@ -621,11 +639,14 @@ public final class Avrcp {
                         .setContentText("Peer supports advanced feature")
                         .setSubText("Re-pair from peer to enable it")
                         .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+                        .setChannelId(AVRCP_NOTIFICATION_ID)
                         .setDefaults(Notification.DEFAULT_ALL)
                         .build();
-                    NotificationManager manager = (NotificationManager)
-                        mContext.getSystemService(Context.NOTIFICATION_SERVICE);
-                    manager.notify(NOTIFICATION_ID, notification);
+
+                    if (mNotificationManager != null )
+                        mNotificationManager.notify(NOTIFICATION_ID, notification);
+                    else
+                        Log.e(TAG,"mNotificationManager is null");
                     Log.v(TAG," update notification manager on remote repair request");
                 }
                 break;
@@ -739,16 +760,17 @@ public final class Avrcp {
                 }
                 boolean volAdj = false;
                 if (msg.arg2 == AVRC_RSP_ACCEPT || msg.arg2 == AVRC_RSP_REJ) {
-                    if (mVolCmdAdjustInProgress == false && mVolCmdSetInProgress == false) {
+                    if ((deviceFeatures[deviceIndex].mVolCmdAdjustInProgress == false) &&
+                        (deviceFeatures[deviceIndex].mVolCmdSetInProgress == false)) {
                         Log.e(TAG, "Unsolicited response, ignored");
                         break;
                     }
                     removeMessages(MSG_ABS_VOL_TIMEOUT);
 
-                    volAdj = mVolCmdAdjustInProgress;
-                    mVolCmdAdjustInProgress = false;
-                    mVolCmdSetInProgress = false;
-                    mAbsVolRetryTimes = 0;
+                    volAdj = deviceFeatures[deviceIndex].mVolCmdAdjustInProgress;
+                    deviceFeatures[deviceIndex].mVolCmdAdjustInProgress = false;
+                    deviceFeatures[deviceIndex].mVolCmdSetInProgress = false;
+                    deviceFeatures[deviceIndex].mAbsVolRetryTimes = 0;
                 }
 
                 // convert remote volume to local volume
@@ -837,12 +859,6 @@ public final class Avrcp {
                     break;
                 }
 
-                if (mA2dpService.isMulticastFeatureEnabled() &&
-                        areMultipleDevicesConnected()) {
-                    if (DEBUG) Log.v(TAG, "Volume change not entertained as multicast is enabled & multiple devices are connected");
-                    break;
-                }
-
                 if (DEBUG) Log.d(TAG, "MSG_ADJUST_VOLUME: direction=" + msg.arg1);
                 for (int i = 0; i < maxAvrcpConnections; i++) {
                     if (deviceFeatures[i].mCurrentDevice != null &&
@@ -922,12 +938,6 @@ public final class Avrcp {
             {
                 if (!isAbsoluteVolumeSupported()) {
                     if (DEBUG) Log.v(TAG, "ignore MSG_SET_ABSOLUTE_VOLUME");
-                    break;
-                }
-
-                if (mA2dpService.isMulticastFeatureEnabled() &&
-                        areMultipleDevicesConnected()) {
-                    if (DEBUG) Log.v(TAG, "Volume change not entertained as multicast is enabled & multiple devices are connected");
                     break;
                 }
 
@@ -1509,7 +1519,10 @@ public final class Avrcp {
                             PlaybackState.PLAYBACK_POSITION_UNKNOWN, 0.0f);
                 }
                 newState = builder.build();
-                currentAttributes = new MediaAttributes(null);
+                if (mMediaController == null)
+                    currentAttributes = new MediaAttributes(null);
+                else
+                    currentAttributes = new MediaAttributes(mMediaController.getMetadata());
                 for (int i = 0; i < maxAvrcpConnections; i++) {
                     if (device != null) {
                         if ((isPlaying != isPlayingState(deviceFeatures[i].mCurrentPlayState)) &&
@@ -1544,8 +1557,11 @@ public final class Avrcp {
         //  - Queue ID is valid and different and MediaMetadata is different
         if (registering || (((newQueueId == -1) || (newQueueId != mLastQueueId))
                                    && !currentAttributes.equals(mMediaAttributes))) {
-            if (registering && (device != null))
+            if (registering && (device != null)) {
                 sendTrackChangedRsp(registering, device);
+                /* Do not update playstatus while processing track change notification */
+                return;
+            }
             else {
                 Log.v(TAG, "maxAvmaxAvrcpConnections " + maxAvrcpConnections);
                 for (int i = 0; i < maxAvrcpConnections; i++) {
@@ -1760,8 +1776,7 @@ public final class Avrcp {
 
             if (isPlayingState(deviceFeatures[deviceIndex].mCurrentPlayState)) {
                 long sinceUpdate =
-                    (SystemClock.elapsedRealtime() - mLastStateUpdate +
-                     deviceFeatures[deviceIndex].mCurrentPlayState.getLastPositionUpdateTime());
+                     SystemClock.elapsedRealtime() - mLastStateUpdate;
                 return sinceUpdate + deviceFeatures[deviceIndex].mCurrentPlayState.getPosition();
             }
             return deviceFeatures[deviceIndex].mCurrentPlayState.getPosition();
@@ -1897,9 +1912,8 @@ public final class Avrcp {
      * NOT USED AT THE MOMENT.
      */
     public boolean isAbsoluteVolumeSupported() {
-        if (mA2dpService.isMulticastFeatureEnabled() &&
-                areMultipleDevicesConnected()) {
-            if (DEBUG) Log.v(TAG, "isAbsoluteVolumeSupported : Absolute volume false multicast is enabled & multiple devices are connected");
+        if (mA2dpService.isMulticastFeatureEnabled()) {
+            if (DEBUG) Log.v(TAG, "isAbsoluteVolumeSupported : Absolute volume is false as multicast is enabled");
             return false;
         }
         List<Byte> absVolumeSupported = new ArrayList<Byte>();

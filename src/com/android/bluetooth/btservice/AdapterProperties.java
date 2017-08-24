@@ -167,7 +167,9 @@ class AdapterProperties {
             mProfileConnectionState.clear();
             mProfileConnectionState = null;
         }
-        mService.unregisterReceiver(mReceiver);
+        if (mReceiver != null) {
+            mService.unregisterReceiver(mReceiver);
+        }
         mService = null;
         mBondedDevices.clear();
     }

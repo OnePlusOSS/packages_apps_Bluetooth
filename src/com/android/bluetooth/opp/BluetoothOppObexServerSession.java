@@ -529,6 +529,7 @@ public class BluetoothOppObexServerSession extends ServerRequestHandler implemen
                 Log.e(TAG, "Error when closing stream after send");
             }
         }
+        cancelNotification();
         return status;
     }
 

@@ -240,6 +240,8 @@ final class HeadsetStateMachine extends StateMachine {
     private BluetoothDevice mTargetDevice = null;
     private BluetoothDevice mIncomingDevice = null;
     private BluetoothDevice mActiveScoDevice = null;
+    private BluetoothDevice mScoRequestedDevice = null;
+    private BluetoothDevice mLastScoDiscReqDevice = null;
     private BluetoothDevice mMultiDisconnectDevice = null;
     private BluetoothDevice mPendingScoForVRDevice = null;
 
@@ -1018,6 +1020,18 @@ final class HeadsetStateMachine extends StateMachine {
                         log("connectAudioNative in Connected; mActiveScoDevice is not null");
                         device = mActiveScoDevice;
                     }
+                    if (mLastScoDiscReqDevice != null) {
+                        Log.d(TAG, "Last SCO Discon Requested device is" + mLastScoDiscReqDevice);
+                        device = mLastScoDiscReqDevice;
+                        mLastScoDiscReqDevice = null;
+                    }
+
+                    if (mScoRequestedDevice != null) {
+                        Log.d(TAG, "SCO Requested device is" + mScoRequestedDevice);
+                        device = mScoRequestedDevice;
+                        mScoRequestedDevice = null;
+                    }
+
                     log("connectAudioNative in Connected for device = " + device);
                     connectAudioNative(getByteAddress(device));
                 } break;
@@ -1293,6 +1307,9 @@ final class HeadsetStateMachine extends StateMachine {
                     } else {
                         log("Sco connected for CS call, do not check network type");
                     }
+                    //Reset SCO requested device
+                    mScoRequestedDevice = null;
+                    mLastScoDiscReqDevice = null;
                     transitionTo(mAudioOn);
                     break;
                 case HeadsetHalConstants.AUDIO_STATE_CONNECTING:
@@ -1387,9 +1404,10 @@ final class HeadsetStateMachine extends StateMachine {
             }
 
             boolean retValue = HANDLED;
+            BluetoothDevice device = null;
             switch (message.what) {
                 case CONNECT: {
-                    BluetoothDevice device = (BluetoothDevice) message.obj;
+                    device = (BluetoothDevice) message.obj;
                     if (device == null) {
                         break;
                     }
@@ -1483,7 +1501,7 @@ final class HeadsetStateMachine extends StateMachine {
                             getByteAddress(mTargetDevice));
                     break;
                 case DISCONNECT: {
-                    BluetoothDevice device = (BluetoothDevice) message.obj;
+                    device = (BluetoothDevice) message.obj;
                     if (!mConnectedDevicesList.contains(device)) {
                         break;
                     }
@@ -1522,6 +1540,9 @@ final class HeadsetStateMachine extends StateMachine {
                     }
                 } break;
                 case DISCONNECT_AUDIO:
+                    device = (BluetoothDevice) message.obj;
+                    Log.d(TAG, "Audioon: Disconnect_audio device " + device +
+                       "ActiveScoDevice" + mActiveScoDevice);
                     if (mActiveScoDevice != null) {
                         if (disconnectAudioNative(getByteAddress(mActiveScoDevice))) {
                             log("Disconnecting SCO audio for device = " + mActiveScoDevice);
@@ -1529,6 +1550,7 @@ final class HeadsetStateMachine extends StateMachine {
                             Log.e(TAG, "disconnectAudioNative failed"
                                             + "for device = " + mActiveScoDevice);
                         }
+                        mLastScoDiscReqDevice = mActiveScoDevice;
                     }
                     break;
                 case VOICE_RECOGNITION_START:
@@ -1555,7 +1577,7 @@ final class HeadsetStateMachine extends StateMachine {
                     processSendClccResponse((HeadsetClccResponse) message.obj);
                     break;
                 case CLCC_RSP_TIMEOUT: {
-                    BluetoothDevice device = (BluetoothDevice) message.obj;
+                    device = (BluetoothDevice) message.obj;
                     clccResponseNative(0, 0, 0, 0, false, "", 0, getByteAddress(device));
                     break;
                 }
@@ -1583,7 +1605,7 @@ final class HeadsetStateMachine extends StateMachine {
                 {
                     Log.d(TAG, "mDialingOut is " + mDialingOut);
                     if (mDialingOut) {
-                        BluetoothDevice device = (BluetoothDevice)message.obj;
+                        device = (BluetoothDevice)message.obj;
                         Log.d(TAG, "Timeout waiting for call to be placed, resetting mDialingOut");
                         mDialingOut= false;
                         atResponseCodeNative(HeadsetHalConstants.AT_RESPONSE_ERROR,
@@ -1593,20 +1615,20 @@ final class HeadsetStateMachine extends StateMachine {
                 }
                 case ENABLE_WBS:
                 {
-                    BluetoothDevice device = (BluetoothDevice) message.obj;
+                    device = (BluetoothDevice) message.obj;
                     configureWBSNative(getByteAddress(device),WBS_CODEC);
                 }
                     break;
                 case DISABLE_WBS:
                 {
-                    BluetoothDevice device = (BluetoothDevice) message.obj;
+                    device = (BluetoothDevice) message.obj;
                     configureWBSNative(getByteAddress(device),NBS_CODEC);
                 }
                     break;
                 case START_VR_TIMEOUT:
                 {
                     if (mWaitingForVoiceRecognition) {
-                        BluetoothDevice device = (BluetoothDevice) message.obj;
+                        device = (BluetoothDevice) message.obj;
                         mWaitingForVoiceRecognition = false;
                         Log.e(TAG, "Timeout waiting for voice recognition"
                                         + "to start");
@@ -1896,7 +1918,7 @@ final class HeadsetStateMachine extends StateMachine {
         public boolean processMessage(Message message) {
             Log.d(TAG, " Enter MultiHFPending process message: " + message.what +
                          ", size: " + mConnectedDevicesList.size());
-
+            BluetoothDevice device = null;
             boolean retValue = HANDLED;
             switch (message.what) {
                 case CONNECT:
@@ -1904,8 +1926,22 @@ final class HeadsetStateMachine extends StateMachine {
                     break;
 
                 case CONNECT_AUDIO:
-                    if (mCurrentDevice != null) {
-                        connectAudioNative(getByteAddress(mCurrentDevice));
+                    device = mCurrentDevice;
+                    if (mLastScoDiscReqDevice != null) {
+                        Log.d(TAG, "Last SCO Discon Requested device is" + mLastScoDiscReqDevice);
+                        device = mLastScoDiscReqDevice;
+                        mLastScoDiscReqDevice = null;
+                    }
+
+                    if (mScoRequestedDevice != null) {
+                        Log.d(TAG, "MHF: SCO Requested device is" + mScoRequestedDevice);
+                        device = mScoRequestedDevice;
+                        mScoRequestedDevice = null;
+                    }
+
+                    if (device != null) {
+                        Log.d(TAG, "Calling ConnectAudioNative with " + device);
+                        connectAudioNative(getByteAddress(device));
                     }
                     break;
                 case CONNECT_TIMEOUT:
@@ -1914,6 +1950,8 @@ final class HeadsetStateMachine extends StateMachine {
                     break;
 
                 case DISCONNECT_AUDIO:
+                    device = (BluetoothDevice) message.obj;
+                    Log.d(TAG, "MHF: DISCONNECT_REQ: " + device + " ActiveScoDevice: " + mActiveScoDevice);
                     if (mActiveScoDevice != null) {
                         if (disconnectAudioNative(getByteAddress(mActiveScoDevice))) {
                             Log.d(TAG, "MultiHFPending, Disconnecting SCO audio for "
@@ -1922,10 +1960,12 @@ final class HeadsetStateMachine extends StateMachine {
                             Log.e(TAG, "disconnectAudioNative failed"
                                             + "for device = " + mActiveScoDevice);
                         }
+                        //Rememebr the Last Disc req sent Device
+                        mLastScoDiscReqDevice = mActiveScoDevice;
                     }
                     break;
                 case DISCONNECT:
-                    BluetoothDevice device = (BluetoothDevice) message.obj;
+                    device = (BluetoothDevice) message.obj;
                     if (mConnectedDevicesList.contains(device) && mTargetDevice != null
                             && mTargetDevice.equals(device)) {
                         // cancel connection to the mTargetDevice
@@ -2338,6 +2378,9 @@ final class HeadsetStateMachine extends StateMachine {
                     /* The state should be still in MultiHFPending state when
                        audio connected since other device is still connecting/
                        disconnecting */
+                    //Reset SCO requested device
+                    mScoRequestedDevice = null;
+                    mLastScoDiscReqDevice = null;
                     break;
                 case HeadsetHalConstants.AUDIO_STATE_CONNECTING:
                     mAudioState = BluetoothHeadset.STATE_AUDIO_CONNECTING;
@@ -3162,6 +3205,9 @@ final class HeadsetStateMachine extends StateMachine {
         if (mPhoneProxy != null) {
             try {
                 mPhoneProxy.answerCall();
+                //Store SCO requested device, if telephony trys to trigger
+                //SCO connection by calling connectAudio
+                mScoRequestedDevice = device;
             } catch (RemoteException e) {
                 Log.e(TAG, Log.getStackTraceString(new Throwable()));
             }
@@ -3243,6 +3289,9 @@ final class HeadsetStateMachine extends StateMachine {
         }
         // Check for virtual call to terminate before sending Call Intent
         terminateScoUsingVirtualVoiceCall();
+        //Store SCO requested device, if telephony trys to trigger
+        //SCO connection by calling connectAudio
+        mScoRequestedDevice = device;
 
         Intent intent = new Intent(
                 Intent.ACTION_CALL_PRIVILEGED, Uri.fromParts(SCHEME_TEL, dialNumber, null));

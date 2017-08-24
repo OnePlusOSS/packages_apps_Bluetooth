@@ -493,7 +493,11 @@ final class A2dpStateMachine extends StateMachine {
             boolean retValue = HANDLED;
             switch(message.what) {
                 case CONNECT:
-                    deferMessage(message);
+                    if (mTargetDevice != (BluetoothDevice) message.obj) {
+                        //Defer only Unique device connection requests
+                        //Dont defer the connection requests for the same device
+                        deferMessage(message);
+                    }
                     break;
                 case CONNECT_TIMEOUT:
                     // This is always for Outgoing connection
@@ -796,18 +800,15 @@ final class A2dpStateMachine extends StateMachine {
     private class Connected extends State {
         @Override
         public void enter() {
-            // Remove pending connection attempts that were deferred during the pending
-            // state. This is to prevent auto connect attempts from disconnecting
-            // devices that previously successfully connected.
-            // TODO: This needs to check for multiple A2DP connections, once supported...
             log("Enter Connected: " + getCurrentMessage().what +
                     ", size: " + mConnectedDevicesList.size());
             // remove timeout for connected device only.
             if (getDeviceForMessage(CONNECT_TIMEOUT) == null) {
                 removeMessages(CONNECT_TIMEOUT);
             }
-            removeDeferredMessages(CONNECT);
-
+            //Dont remove all deferred messages as only Unique connect
+            //requests are queued in Pending state
+            //removeDeferredMessages(CONNECT);
             // Upon connected, the audio starts out as stopped
             broadcastAudioState(mCurrentDevice, BluetoothA2dp.STATE_NOT_PLAYING,
                                 BluetoothA2dp.STATE_PLAYING);
@@ -1734,6 +1735,8 @@ final class A2dpStateMachine extends StateMachine {
         Intent intent = new Intent(BluetoothA2dp.ACTION_CODEC_CONFIG_CHANGED);
         intent.putExtra(BluetoothCodecStatus.EXTRA_CODEC_STATUS, mCodecStatus);
         intent.addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT);
+        intent.addFlags(Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
+        intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
 
         log("A2DP Codec Config: " + prevCodecConfig + "->" + newCodecConfig);
         for (BluetoothCodecConfig codecConfig : codecsLocalCapabilities) {
@@ -1910,6 +1913,8 @@ final class A2dpStateMachine extends StateMachine {
             Intent intent = new Intent(BluetoothA2dp.ACTION_CODEC_CONFIG_CHANGED);
             intent.putExtra(BluetoothCodecStatus.EXTRA_CODEC_STATUS, mCodecStatus);
             intent.addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT);
+            intent.addFlags(Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
+            intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
 
             intent.putExtra(BluetoothDevice.EXTRA_DEVICE, mDummyDevice);
             mAudioManager.handleBluetoothA2dpDeviceConfigChange(mDummyDevice);
