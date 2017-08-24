@@ -1491,12 +1491,30 @@ public final class Avrcp {
                     && mReportedPlayerID != mCurrAddrPlayerID) {
                 registerNotificationRspAddrPlayerChangedNative(
                         AvrcpConstants.NOTIFICATION_TYPE_CHANGED, mCurrAddrPlayerID, sUIDCounter, addr);
-                mAddrPlayerChangedNT = AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
-                // Changing player sends reject to anything else we would notify...
+                deviceFeatures[i].mAddrPlayerChangedNT = AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
                 mReportedPlayerID = mCurrAddrPlayerID;
-                mPlayStatusChangedNT = AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
-                mTrackChangedNT = AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
-                mPlayPosChangedNT = AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
+                // Changing player sends reject to anything else we would notify...
+                if (deviceFeatures[i].mPlayStatusChangedNT ==
+                        AvrcpConstants.NOTIFICATION_TYPE_INTERIM) {
+                    deviceFeatures[i].mPlayStatusChangedNT =
+                            AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
+                    registerNotificationRspPlayStatusNative(AvrcpConstants.NOTIFICATION_TYPE_CHANGED
+                             ,PLAYSTATUS_STOPPED, addr);
+                }
+
+                if (deviceFeatures[i].mTrackChangedNT ==
+                        AvrcpConstants.NOTIFICATION_TYPE_INTERIM) {
+                    String address = Utils.getAddressStringFromByte(addr);
+                    BluetoothDevice dev = mAdapter.getRemoteDevice(address);
+                    sendTrackChangedRsp(false, dev);
+                }
+
+                if (deviceFeatures[i].mPlayPosChangedNT ==
+                        AvrcpConstants.NOTIFICATION_TYPE_INTERIM) {
+                    deviceFeatures[i].mPlayPosChangedNT = AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
+                    registerNotificationRspPlayPosNative(AvrcpConstants.NOTIFICATION_TYPE_CHANGED,
+                            -1, addr);
+                }
                 // If the player changed, they need to re-request anything here again
                 // so we can skip the rest of the update.
                 return;
@@ -1547,6 +1565,13 @@ public final class Avrcp {
             }
         }
 
+        if (mMediaController != null && (mMediaController.getMetadata() != null)) {
+            MediaMetadata data = mMediaController.getMetadata();
+            mSongLengthMs = data.getLong(MediaMetadata.METADATA_KEY_DURATION);
+        } else {
+            mSongLengthMs = 0L;
+        }
+
         long newQueueId = MediaSession.QueueItem.UNKNOWN_ID;
         if (newState != null) newQueueId = newState.getActiveQueueItemId();
         Log.v(TAG, "Media update: id " + mLastQueueId + "➡" + newQueueId + "? "
@@ -1572,7 +1597,6 @@ public final class Avrcp {
 
                     if ((deviceFeatures[i].mCurrentDevice != null) &&
                         (deviceFeatures[i].mTrackChangedNT == AvrcpConstants.NOTIFICATION_TYPE_INTERIM)) {
-                        deviceFeatures[i].mTrackChangedNT = AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
                         deviceFeatures[i].mTracksPlayed++;
                         Log.v(TAG,"sending track change for device " + i);
                         sendTrackChangedRsp(registering, deviceFeatures[i].mCurrentDevice);
@@ -1653,7 +1677,6 @@ public final class Avrcp {
 
             case EVT_TRACK_CHANGED:
                 Log.v(TAG, "Track changed notification enabled");
-                mTrackChangedNT = AvrcpConstants.NOTIFICATION_TYPE_INTERIM;
                 deviceFeatures[deviceIndex].mTrackChangedNT =
                         AvrcpConstants.NOTIFICATION_TYPE_INTERIM;
                 updateCurrentMediaState(true, deviceFeatures[deviceIndex].mCurrentDevice);
@@ -1732,14 +1755,15 @@ public final class Avrcp {
     private void sendTrackChangedRsp(boolean registering, BluetoothDevice device) {
         int deviceIndex = getIndexForDevice(device);
         Log.d(TAG, "Enter sendTrackChangedRsp");
-        if (!registering && mTrackChangedNT != AvrcpConstants.NOTIFICATION_TYPE_INTERIM) {
+        if (deviceFeatures[deviceIndex].mTrackChangedNT != AvrcpConstants.NOTIFICATION_TYPE_INTERIM
+                && !registering) {
             if (DEBUG) Log.d(TAG, "sendTrackChangedRsp: Not registered or registering.");
             return;
         }
 
-        mTrackChangedNT = AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
-        if (registering) mTrackChangedNT = AvrcpConstants.NOTIFICATION_TYPE_INTERIM;
-        deviceFeatures[deviceIndex].mTrackChangedNT = mTrackChangedNT;
+        deviceFeatures[deviceIndex].mTrackChangedNT = AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
+        if (registering)
+            deviceFeatures[deviceIndex].mTrackChangedNT = AvrcpConstants.NOTIFICATION_TYPE_INTERIM;
 
         MediaPlayerInfo info = getAddressedPlayerInfo();
         byte[] byteAddr = getByteAddress(deviceFeatures[deviceIndex].mCurrentDevice);
@@ -1754,7 +1778,8 @@ public final class Avrcp {
             return;
         }
 
-        mAddressedMediaPlayer.sendTrackChangeWithId(mTrackChangedNT, mMediaController, byteAddr);
+        mAddressedMediaPlayer.sendTrackChangeWithId(deviceFeatures[deviceIndex].mTrackChangedNT,
+                mMediaController, byteAddr);
         Log.d(TAG, "Exit sendTrackChangedRsp");
     }
 
@@ -3596,8 +3621,8 @@ public final class Avrcp {
         /* IOT Fix as some remote recognise FF/Rewind state as non-playing hence send
          * changed response at the time of Release of Fast-Forward/Rewind Button */
         if ((code == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD || code == KeyEvent.KEYCODE_MEDIA_REWIND)
-                && (mPlayStatusChangedNT == AvrcpConstants.NOTIFICATION_TYPE_INTERIM) &&
-                (action == KeyEvent.ACTION_UP)) {
+                && (deviceFeatures[deviceIndex].mPlayStatusChangedNT ==
+                AvrcpConstants.NOTIFICATION_TYPE_INTERIM) && (action == KeyEvent.ACTION_UP)) {
             deviceFeatures[deviceIndex].mPlayStatusChangedNT =
                     AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
             registerNotificationRspPlayStatusNative(deviceFeatures[deviceIndex].mPlayStatusChangedNT
