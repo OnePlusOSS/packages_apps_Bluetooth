@@ -89,8 +89,8 @@ public class HeadsetClientService extends ProfileService {
         if (DBG) {
             Log.d(TAG, "start()");
         }
-        // Setup the JNI service
-        NativeInterface.initializeNative();
+
+
         mAudioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
 
         mSmFactory = new HeadsetClientStateMachineFactory();
@@ -113,6 +113,8 @@ public class HeadsetClientService extends ProfileService {
         // Create the thread on which all State Machines will run
         mSmThread = new HandlerThread("HeadsetClient.SM");
         mSmThread.start();
+
+        // Setup the JNI service
         NativeInterface.initializeNative();
 
         return true;
