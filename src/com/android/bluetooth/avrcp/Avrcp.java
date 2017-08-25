@@ -337,6 +337,7 @@ public final class Avrcp {
             mLocalVolume = -1;
             mLastLocalVolume = -1;
             mAbsVolThreshold = 0;
+            mAbsoluteVolume = -1;
             mVolumeMapping = new HashMap<Integer, Integer>();
             Resources resources = context.getResources();
             if (resources != null) {
