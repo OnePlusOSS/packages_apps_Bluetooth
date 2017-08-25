@@ -685,7 +685,9 @@ final class HeadsetStateMachine extends StateMachine {
                         case EVENT_TYPE_BIEV:
                             processAtBiev(event.valueInt, event.valueInt2, event.device);
                             break;
-
+                        case EVENT_TYPE_AT_CIND:
+                            processAtCind(event.device);
+                            break;
                         default:
                             Log.e(TAG, "Unexpected event: " + event.type);
                             break;
