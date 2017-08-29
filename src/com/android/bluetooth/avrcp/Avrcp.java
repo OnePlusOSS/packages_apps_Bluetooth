@@ -195,6 +195,7 @@ public final class Avrcp {
     private static final int MSG_NOW_PLAYING_CHANGED_RSP = 19;
     private static final int MSG_UPDATE_MEDIA = 20;
     private static final int MESSAGE_DEVICE_RC_CLEANUP = 21;
+    private static final int MSG_PLAY_INTERVAL_TIMEOUT_2 = 22;
 
     private static final int STACK_CLEANUP = 0;
     private static final int APP_CLEANUP = 1;
@@ -728,6 +729,7 @@ public final class Avrcp {
                 break;
 
             case MSG_PLAY_INTERVAL_TIMEOUT:
+            case MSG_PLAY_INTERVAL_TIMEOUT_2:
                 if (DEBUG) Log.v(TAG, "MSG_PLAY_INTERVAL_TIMEOUT");
                 Log.v(TAG, "event for device address " + (BluetoothDevice)msg.obj);
                 deviceIndex = getIndexForDevice((BluetoothDevice) msg.obj);
@@ -1887,6 +1889,7 @@ public final class Avrcp {
         long playPositionMs = getPlayPosition(deviceFeatures[i].mCurrentDevice);
         int currPlayStatus = convertPlayStateToPlayStatus(deviceFeatures[i].mCurrentPlayState);
         String debugLine = "sendPlayPosNotificationRsp: ";
+        int currMsgPlayIntervalTimeout = (i == 0) ? MSG_PLAY_INTERVAL_TIMEOUT : MSG_PLAY_INTERVAL_TIMEOUT_2;
 
         // Some remote devices are going to bad state when sending play position
         // as ffff for non-playing state
@@ -1922,10 +1925,10 @@ public final class Avrcp {
             }
         }
 
-        mHandler.removeMessages(MSG_PLAY_INTERVAL_TIMEOUT);
+        mHandler.removeMessages(currMsgPlayIntervalTimeout);
         if (deviceFeatures[i].mPlayPosChangedNT == AvrcpConstants.NOTIFICATION_TYPE_INTERIM &&
                  isPlayingState(deviceFeatures[i].mCurrentPlayState)) {
-            Message msg = mHandler.obtainMessage(MSG_PLAY_INTERVAL_TIMEOUT, 0, 0,
+            Message msg = mHandler.obtainMessage(currMsgPlayIntervalTimeout, 0, 0,
                                                  deviceFeatures[i].mCurrentDevice);
             long delay = deviceFeatures[i].mPlaybackIntervalMs;
             if (deviceFeatures[i].mNextPosMs != -1) {
