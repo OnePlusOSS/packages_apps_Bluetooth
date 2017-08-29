@@ -1298,9 +1298,9 @@ final class HeadsetStateMachine extends StateMachine {
 
                     mAudioManager.setParameters("BT_SCO=on");
                     mAudioManager.setBluetoothScoOn(true);
-                    broadcastAudioState(device, BluetoothHeadset.STATE_AUDIO_CONNECTED,
-                            BluetoothHeadset.STATE_AUDIO_CONNECTING);
                     mActiveScoDevice = device;
+                    broadcastAudioState(device, BluetoothHeadset.STATE_AUDIO_CONNECTED,
+                                        BluetoothHeadset.STATE_AUDIO_CONNECTING);
                     if (!mPhoneState.getIsCsCall()) {
                         log("Sco connected for call other than CS, check network type");
                         sendVoipConnectivityNetworktype(true);
