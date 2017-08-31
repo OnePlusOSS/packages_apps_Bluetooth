@@ -1683,7 +1683,18 @@ public final class Avrcp {
                 if (param <= 0)
                    param = 1;
 
-                long update_interval = SystemProperties.getLong("persist.bt.avrcp.pos_time", 3000L);
+                boolean isSplitA2dpEnabled = false;
+                long update_interval = 0L;
+                String offloadSupported = SystemProperties.get("persist.vendor.bt.enable.splita2dp");
+                if (offloadSupported.isEmpty() || "true".equals(offloadSupported)) {
+                    isSplitA2dpEnabled = true;
+                    Log.v(TAG,"split enabled");
+                }
+                if (isSplitA2dpEnabled) {
+                    update_interval = SystemProperties.getLong("persist.bt.avrcp.pos_time", 3000L);
+                } else {
+                    update_interval = SystemProperties.getLong("persist.bt.avrcp.pos_time", 1000L);
+                }
                 deviceFeatures[deviceIndex].mPlayPosChangedNT =
                                              AvrcpConstants.NOTIFICATION_TYPE_INTERIM;
                 update_interval = Math.max((long)param * 1000L, update_interval);
