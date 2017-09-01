@@ -3063,6 +3063,8 @@ public final class Avrcp {
     /* unregister to the old controller, update new IDs and register to the new controller */
     private boolean updateCurrentController(int addrId, int browseId) {
         boolean registerRsp = true;
+        int preAddrId = mCurrAddrPlayerID;
+        int preBrowseId = mCurrBrowsePlayerID;
 
         updateNewIds(addrId, browseId);
 
@@ -3084,6 +3086,7 @@ public final class Avrcp {
                 } else {
                     mAddressedMediaPlayer.updateNowPlayingList(null);
                     registerRsp = false;
+                    updateNewIds(preAddrId, preBrowseId);
                 }
             }
         }
