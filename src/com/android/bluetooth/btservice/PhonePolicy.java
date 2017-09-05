@@ -343,6 +343,24 @@ class PhonePolicy {
     }
 
     public void connectOtherProfile(BluetoothDevice device) {
+        debugLog("connectOtherProfile - device " + device);
+        if (mHandler.hasMessages(MESSAGE_CONNECT_OTHER_PROFILES) == true) {
+            HeadsetService hsService = mFactory.getHeadsetService();
+            A2dpService a2dpService = mFactory.getA2dpService();
+            boolean a2dpConnected = false;
+            boolean hsConnected = false;
+            List<BluetoothDevice> a2dpConnDevList = null;
+            List<BluetoothDevice> hsConnDevList = null;
+            hsConnDevList = hsService.getConnectedDevices();
+            a2dpConnDevList = a2dpService.getConnectedDevices();
+            if (hsService != null && hsConnDevList.contains(device)) hsConnected = true;
+            if (a2dpService != null && a2dpConnDevList.contains(device)) a2dpConnected = true;
+            if (a2dpConnected && hsConnected) {
+                debugLog("HFP and a2dp are connected remove queued msg");
+                mHandler.removeMessages(MESSAGE_CONNECT_OTHER_PROFILES);
+                return;
+            }
+        }
         if ((mHandler.hasMessages(MESSAGE_CONNECT_OTHER_PROFILES) == false)
                 && (mAdapterService.isQuietModeEnabled() == false)) {
             Message m = mHandler.obtainMessage(MESSAGE_CONNECT_OTHER_PROFILES);
