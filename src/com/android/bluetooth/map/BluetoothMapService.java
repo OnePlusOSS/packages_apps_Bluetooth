@@ -641,12 +641,10 @@ public class BluetoothMapService extends ProfileService {
             }
         }
         mAdapter = BluetoothAdapter.getDefaultAdapter();
-        // Move SDP records create to Handler Thread instead of main thread.
-        BluetoothMapFixes.sendCreateMasInstances(this, CREATE_MAS_INSTANCES);
         mSmsCapable = getResources().getBoolean(
                 com.android.internal.R.bool.config_sms_capable);
-        // Uses mEnabledAccounts, hence getEnabledAccountItems() must be called before this.
-        createMasInstances();
+        // Move SDP records creation to Handler Thread instead of main thread.
+        BluetoothMapFixes.sendCreateMasInstances(this, CREATE_MAS_INSTANCES);
 
         // start RFCOMM listener
         sendStartListenerMessage(-1);
