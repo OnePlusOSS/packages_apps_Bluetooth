@@ -2468,6 +2468,13 @@ final class HeadsetStateMachine extends StateMachine {
                         } else {
                             log("Sco disconnected for CS call, do not check network type");
                         }
+
+                        if (mPlaybackSilence &&
+                            (mAudioPlayer != null) &&
+                            mAudioPlayer.isPlaying()) {
+                            Log.d(TAG, "SCO disconnected, stop audio playback");
+                            mAudioPlayer.stop();
+                        }
                     }
                     /* The state should be still in MultiHFPending state when audio
                        disconnected since other device is still connecting/
