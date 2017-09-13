@@ -295,6 +295,7 @@ public final class Avrcp {
         private long mTracksPlayed;
         private int mAvailablePlayersChangedNT;
         private int mAddrPlayerChangedNT;
+        private long mLastStateUpdate;
 
         private int mRemoteVolume;
         private int mLastRemoteVolume;
@@ -332,6 +333,7 @@ public final class Avrcp {
             mRemoteVolume = -1;
             mAvailablePlayersChangedNT = AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
             mAddrPlayerChangedNT = AvrcpConstants.NOTIFICATION_TYPE_CHANGED;
+            mLastStateUpdate = -1;
             mInitialRemoteVolume = -1;
             isActiveDevice = false;
             mLastRemoteVolume = -1;
@@ -1267,6 +1269,7 @@ public final class Avrcp {
             if ((state.getState() != PlaybackState.STATE_PLAYING) ||
                                 isPlayStateToBeUpdated(deviceIndex)) {
                 updatePlayStatusForDevice(deviceIndex, state);
+                deviceFeatures[deviceIndex].mLastStateUpdate = mLastStateUpdate;
             }
         }
 
@@ -1522,6 +1525,7 @@ public final class Avrcp {
 
         MediaAttributes currentAttributes;
         PlaybackState newState = null;
+        boolean updateA2dpPlayState = false;
 
         synchronized (this) {
             if (mMediaController == null ||
@@ -1529,12 +1533,22 @@ public final class Avrcp {
                 boolean isPlaying = (mA2dpState == BluetoothA2dp.STATE_PLAYING) && mAudioManager.isMusicActive();
                 // Use A2DP state if we don't have a MediaControlller
                 PlaybackState.Builder builder = new PlaybackState.Builder();
-                if (isPlaying) {
-                    builder.setState(PlaybackState.STATE_PLAYING,
-                            PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1.0f);
+                if (mMediaController == null) {
+                    if (isPlaying) {
+                        builder.setState(PlaybackState.STATE_PLAYING,
+                                PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1.0f);
+                    } else {
+                        builder.setState(PlaybackState.STATE_PAUSED,
+                                PlaybackState.PLAYBACK_POSITION_UNKNOWN, 0.0f);
+                    }
                 } else {
-                    builder.setState(PlaybackState.STATE_PAUSED,
-                            PlaybackState.PLAYBACK_POSITION_UNKNOWN, 0.0f);
+                    if (isPlaying) {
+                        builder.setState(PlaybackState.STATE_PLAYING,
+                                mMediaController.getPlaybackState().getPosition(), 1.0f);
+                    } else {
+                        builder.setState(PlaybackState.STATE_PAUSED,
+                                mMediaController.getPlaybackState().getPosition(), 0.0f);
+                    }
                 }
                 newState = builder.build();
                 if (mMediaController == null)
@@ -1549,6 +1563,8 @@ public final class Avrcp {
                                 deviceFeatures[i].isActiveDevice = true;
                                 Log.v(TAG,"updateCurrentMediaState: Active device is set true at index = " + i);
                             }
+                            updateA2dpPlayState = true;
+                            deviceFeatures[i].mLastStateUpdate = SystemClock.elapsedRealtime();
                         }
 
                         if (!device.equals(deviceFeatures[i].mCurrentDevice) &&
@@ -1606,7 +1622,15 @@ public final class Avrcp {
             mLastQueueId = newQueueId;
         }
 
-        updatePlaybackState(newState, device);
+        if (registering || device == null || updateA2dpPlayState)
+            updatePlaybackState(newState, device);
+
+        if (updateA2dpPlayState && newState.getState() == PlaybackState.STATE_PLAYING) {
+            for (int i = 0; i < maxAvrcpConnections; i++) {
+                if (device != null && device.equals(deviceFeatures[i].mCurrentDevice))
+                    sendPlayPosNotificationRsp(false, i);
+            }
+        }
     }
 
     private void getRcFeaturesRequestFromNative(byte[] address, int features) {
@@ -1809,7 +1833,7 @@ public final class Avrcp {
 
             if (isPlayingState(deviceFeatures[deviceIndex].mCurrentPlayState)) {
                 long sinceUpdate =
-                     SystemClock.elapsedRealtime() - mLastStateUpdate;
+                     SystemClock.elapsedRealtime() - deviceFeatures[deviceIndex].mLastStateUpdate;
                 return sinceUpdate + deviceFeatures[deviceIndex].mCurrentPlayState.getPosition();
             }
             return deviceFeatures[deviceIndex].mCurrentPlayState.getPosition();
