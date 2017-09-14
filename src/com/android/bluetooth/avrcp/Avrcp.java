@@ -1598,6 +1598,9 @@ public final class Avrcp {
         //  - Queue ID is valid and different and MediaMetadata is different
         if (registering || (((newQueueId == -1) || (newQueueId != mLastQueueId))
                                    && !currentAttributes.equals(mMediaAttributes))) {
+            mMediaAttributes = currentAttributes;
+            mLastQueueId = newQueueId;
+
             if (registering && (device != null)) {
                 sendTrackChangedRsp(registering, device);
                 /* Do not update playstatus while processing track change notification */
@@ -1618,8 +1621,6 @@ public final class Avrcp {
                     }
                 }
             }
-            mMediaAttributes = currentAttributes;
-            mLastQueueId = newQueueId;
         }
 
         if (registering || device == null || updateA2dpPlayState)
