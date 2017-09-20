@@ -278,10 +278,12 @@ public class A2dpSinkStreamHandler extends Handler {
             if (DBG) {
                 Log.d(TAG, "Pausing AVRCP.");
             }
-            avrcpService.sendPassThroughCmd(avrcpService.getConnectedDevices().get(0),
+            // Get connected device in synchronous mode. Otherwise there may be
+            // 'IndexOutOfBoundsException' in 'ArrayList.get'.
+            avrcpService.sendPassThroughCmd(avrcpService.getConnectedDevice(0),
                     AvrcpControllerService.PASS_THRU_CMD_ID_PAUSE,
                     AvrcpControllerService.KEY_STATE_PRESSED);
-            avrcpService.sendPassThroughCmd(avrcpService.getConnectedDevices().get(0),
+            avrcpService.sendPassThroughCmd(avrcpService.getConnectedDevice(0),
                     AvrcpControllerService.PASS_THRU_CMD_ID_PAUSE,
                     AvrcpControllerService.KEY_STATE_RELEASED);
         } else {
@@ -300,10 +302,12 @@ public class A2dpSinkStreamHandler extends Handler {
             if (DBG) {
                 Log.d(TAG, "Playing AVRCP.");
             }
-            avrcpService.sendPassThroughCmd(avrcpService.getConnectedDevices().get(0),
+            // Get connected device in synchronous mode. Otherwise there may be
+            // 'IndexOutOfBoundsException' in 'ArrayList.get'.
+            avrcpService.sendPassThroughCmd(avrcpService.getConnectedDevice(0),
                     AvrcpControllerService.PASS_THRU_CMD_ID_PLAY,
                     AvrcpControllerService.KEY_STATE_PRESSED);
-            avrcpService.sendPassThroughCmd(avrcpService.getConnectedDevices().get(0),
+            avrcpService.sendPassThroughCmd(avrcpService.getConnectedDevice(0),
                     AvrcpControllerService.PASS_THRU_CMD_ID_PLAY,
                     AvrcpControllerService.KEY_STATE_RELEASED);
         } else {
